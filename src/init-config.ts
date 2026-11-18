@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import path from 'node:path'
 
-import type { Config } from './config.ts'
-import { DEFAULT_OUTPUT, emptyBackfill, parseConfig, readJsonFile, SCHEMA_URL } from './config.ts'
+import type { BackfillConfig, Config } from './config.ts'
+import { DEFAULT_OUTPUT, parseConfig, readJsonFile, SCHEMA_URL } from './config.ts'
 import { ConfigError } from './errors.ts'
 import { tryRun } from './exec.ts'
-
-const REPO = /^[\w.-]+\/[\w.-]+$/u
+import { expandHome } from './local.ts'
 
 export interface Detected {
   login: string | null
@@ -17,6 +18,7 @@ export interface Answers {
   emails: string[]
   output: string
   canonical: Record<string, string>
+  backfill: BackfillConfig
 }
 
 /** The config file as written to disk. */
@@ -63,26 +65,46 @@ export function splitList(text: string): string[] {
   return unique(text.split(/[,\n]/u))
 }
 
-/** `copy/repo=main/repo, …` to a map; an error string for a malformed pair. */
-export function parseCanonical(text: string): Record<string, string> | string {
-  const map: Record<string, string> = {}
-  for (const pair of splitList(text)) {
-    const [copy = '', main = '', ...rest] = pair.split('=').map((part) => part.trim())
-    if (rest.length > 0 || !REPO.test(copy) || !REPO.test(main)) {
-      return `"${pair}" is not owner/copy=owner/main`
-    }
-    map[copy] = main
+/** The folders the backfill scans for clones, as paths. */
+export function listFolders(backfill: BackfillConfig): string[] {
+  return backfill.localFolders.map((folder) => path.join(backfill.projectsRoot, folder))
+}
+
+/** The deepest folder that holds every one of `dirs`. */
+function commonDir(dirs: readonly string[]): string {
+  const [first = [], ...rest] = dirs.map((dir) => dir.split(path.sep))
+  const differs = first.findIndex((part, index) => rest.some((parts) => parts[index] !== part))
+  const shared = differs === -1 ? first : first.slice(0, differs)
+  return shared.join(path.sep) || path.sep
+}
+
+function collapseHome(dir: string): string {
+  const home = homedir()
+  return dir === home || dir.startsWith(home + path.sep) ? `~${dir.slice(home.length)}` : dir
+}
+
+/**
+ * Backfill settings that scan `folders`. The same folders as before change
+ * nothing, so the paths that `remote` and `branches` are keyed by stay valid.
+ */
+export function withFolders(backfill: BackfillConfig, folders: readonly string[]): BackfillConfig {
+  const current = listFolders(backfill)
+  if (folders.length === current.length && folders.every((folder) => current.includes(folder))) {
+    return backfill
   }
-  return map
+  if (folders.length === 0) {
+    return { ...backfill, localFolders: [] }
+  }
+  const dirs = folders.map((folder) => path.resolve(expandHome(folder)))
+  const root = commonDir(dirs)
+  return {
+    ...backfill,
+    projectsRoot: collapseHome(root),
+    localFolders: dirs.map((dir) => path.relative(root, dir) || '.'),
+  }
 }
 
-export function formatCanonical(map: Readonly<Record<string, string>>): string {
-  return Object.entries(map)
-    .map(([copy, main]) => `${copy}=${main}`)
-    .join(', ')
-}
-
-/** Answers win; lists the monthly runs maintain and backfill settings are kept. */
+/** Answers win; the lists the monthly runs maintain are kept. */
 export function buildConfig(existing: Config | null, answers: Answers): ConfigFile {
   return {
     $schema: SCHEMA_URL,
@@ -92,7 +114,7 @@ export function buildConfig(existing: Config | null, answers: Answers): ConfigFi
     canonical: answers.canonical,
     approved: existing?.approved ?? [],
     ignored: existing?.ignored ?? [],
-    backfill: existing?.backfill ?? emptyBackfill(),
+    backfill: answers.backfill,
   }
 }
 

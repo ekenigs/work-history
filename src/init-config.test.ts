@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import type { Config } from './config.ts'
-import { parseConfig, SCHEMA_URL } from './config.ts'
+import { emptyBackfill, parseConfig, SCHEMA_URL } from './config.ts'
 import { ConfigError } from './errors.ts'
 import {
   buildConfig,
   checkedConfig,
-  formatCanonical,
-  parseCanonical,
+  listFolders,
   serialize,
   splitList,
+  withFolders,
 } from './init-config.ts'
 
 function validConfig(raw: unknown): Config {
@@ -25,6 +25,7 @@ const answers = {
   emails: ['ada@work.example'],
   output: 'history.md',
   canonical: { 'acme/ui': 'acme/monorepo' },
+  backfill: emptyBackfill(),
 }
 
 describe(splitList, () => {
@@ -36,23 +37,33 @@ describe(splitList, () => {
   })
 })
 
-describe('canonical mappings', () => {
-  const map = { 'acme/ui': 'acme/monorepo', 'acme/docs': 'acme/monorepo' }
+describe(withFolders, () => {
+  const backfill = { ...emptyBackfill(), projectsRoot: '/srv/code', localFolders: ['acme'] }
 
-  it('parses copy=source pairs', () => {
-    expect(parseCanonical('acme/ui=acme/monorepo, acme/docs = acme/monorepo')).toStrictEqual(map)
+  it('lists the scanned folders as paths', () => {
+    expect(listFolders(backfill)).toStrictEqual(['/srv/code/acme'])
   })
 
-  it('formats a map back to text', () => {
-    expect(formatCanonical(map)).toBe('acme/ui=acme/monorepo, acme/docs=acme/monorepo')
+  it('changes nothing when the folders are the same', () => {
+    expect(withFolders(backfill, ['/srv/code/acme'])).toBe(backfill)
   })
 
-  it('accepts an empty answer', () => {
-    expect(parseCanonical('')).toStrictEqual({})
+  it('scans a single folder from its own root', () => {
+    expect(withFolders(backfill, ['/srv/other'])).toMatchObject({
+      projectsRoot: '/srv/other',
+      localFolders: ['.'],
+    })
   })
 
-  it.each(['acme/ui', 'acme/ui=monorepo', 'a/b=c/d=e/f'])('rejects %j', (text) => {
-    expect(parseCanonical(text)).toBeTypeOf('string')
+  it('puts several folders under the folder they share', () => {
+    expect(
+      withFolders(backfill, ['/srv/code/acme', '/srv/code/side/x', '/srv/code']),
+    ).toMatchObject({ projectsRoot: '/srv/code', localFolders: ['acme', 'side/x', '.'] })
+  })
+
+  it('clears the folders for an empty answer and keeps the other settings', () => {
+    const cleared = withFolders({ ...backfill, noGit: ['acme/sketches'] }, [])
+    expect(cleared).toMatchObject({ localFolders: [], noGit: ['acme/sketches'] })
   })
 })
 
@@ -64,7 +75,7 @@ describe(buildConfig, () => {
     expect(parseConfig(written)).toHaveProperty('config.output', 'history.md')
   })
 
-  it('keeps the lists and backfill settings of an existing config', () => {
+  it('keeps the lists of an existing config and takes the backfill settings from the answers', () => {
     const existing = validConfig({
       login: 'old',
       emails: ['old@x.example'],
@@ -72,12 +83,13 @@ describe(buildConfig, () => {
       ignored: ['acme/fork'],
       backfill: { localFolders: ['acme'] },
     })
-    expect(buildConfig(existing, answers)).toMatchObject({
+    const backfill = { ...existing.backfill, localFolders: ['acme', 'side'] }
+    expect(buildConfig(existing, { ...answers, backfill })).toMatchObject({
       login: 'ada',
       emails: ['ada@work.example'],
       approved: ['acme/monorepo'],
       ignored: ['acme/fork'],
-      backfill: { localFolders: ['acme'] },
+      backfill: { localFolders: ['acme', 'side'] },
     })
   })
 

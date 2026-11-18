@@ -73,7 +73,7 @@ In the repo (or folder) where you want to keep your log:
 npx work-history init
 ```
 
-`init` finds your GitHub login and commit emails, asks you to confirm them, writes `work-history.config.json`, and offers to install the agent skill into `.agents/skills/work-history` (linked from `.claude/skills`).
+`init` finds your GitHub login and commit emails, asks you to confirm them, asks which folders hold your local clones, writes `work-history.config.json`, and offers to install the agent skill into `.agents/skills/work-history` (linked from `.claude/skills`).
 
 Then ask your agent:
 
@@ -91,10 +91,12 @@ No agent? Add the repos you want to `approved` in the config, then run `npx work
 
 Creates or updates `work-history.config.json`. Running it again keeps your approved and ignored repos and backfill settings.
 
+The folders you name are saved under `backfill` for the backfill to read. `init` also compares your commits across the clones in them. When two repos share commits (a mirror, a fork, a package split out of a monorepo), it asks which repo that work counts under and saves your answer in `canonical`. It can only compare repos you have cloned, and it misses a copy that squashes commits, so add those pairs to `canonical` by hand.
+
 | Option            | Description                                                 |
 | ----------------- | ----------------------------------------------------------- |
 | `--config <file>` | Config file to write. Default: `./work-history.config.json` |
-| `-y`, `--yes`     | Accept the detected values without prompts.                 |
+| `-y`, `--yes`     | Accept the detected values without prompts. Skips the scan. |
 
 ### `work-history collect backfill`
 
