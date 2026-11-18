@@ -19,10 +19,10 @@ The Acme web app and its API. 2025-03 → 2026-10.
 
 ## How it works
 
-1. The `work-history` CLI reads GitHub through the [GitHub CLI](https://cli.github.com/) and prints your changes as JSON Lines: one record per merged PR or direct commit, deduplicated across branches and copies. `collect` only reads; it never writes your log.
+1. The `work-history` CLI reads GitHub through the [GitHub CLI](https://cli.github.com/) and prints your changes as JSON Lines: one record per merged PR or direct commit, deduplicated across branches and copies. Without `--no-agent` it only reads; it never writes your log.
 2. The `work-history` [agent skill](skills/work-history/SKILL.md) runs the CLI, asks you which new repos count, writes the entries with a fixed rubric (one entry per feature, facts from PR text only), moves the cursor, and opens a pull request with the update.
 
-Run it once to backfill your history, then once a month. A missed month catches up on the next run, because the cursor in the file only moves when an update lands.
+Run it once to backfill your history, then as often as you like: every week, every month, whenever you remember. A late run catches up by itself, because the cursor in the file only moves when an update lands.
 
 ### Why a coding agent
 
@@ -37,7 +37,7 @@ The skill is plain Markdown in the open [Agent Skills](https://agentskills.io) f
 
 ### Without an agent
 
-`work-history render` writes the log itself, one line per change, from the same records:
+With `--no-agent`, the CLI writes the log itself, one line per change, from the same records:
 
 ```md
 - **Add file uploads** (2026-09). [#561](https://github.com/acme/monorepo/pull/561); +1840/−210 lines across 37 files.
@@ -49,7 +49,7 @@ It skips obvious noise (dependency bumps, merge, WIP and lint commits), writes o
 
 - Node.js 24 or later.
 - The GitHub CLI, signed in: `gh auth login`.
-- A coding agent that loads skills from `.agents/skills` or `.claude/skills`, such as Claude Code, Codex or Cursor. Without one, use [`render`](#without-an-agent).
+- A coding agent that loads skills from `.agents/skills` or `.claude/skills`, such as Claude Code, Codex or Cursor. Without one, use [`--no-agent`](#without-an-agent).
 
 ## Quick start
 
@@ -77,15 +77,13 @@ npx work-history init
 
 Then ask your agent:
 
-> Backfill my work history.
+> Update my work history.
 
-and once a month:
+The first time, that backfills your whole history. After that, the same request catches up from where the log stops.
 
-> Run the monthly work-history update.
+In an agent that runs skills as slash commands, such as Claude Code, `/work-history` does the same.
 
-In an agent that runs skills as slash commands, such as Claude Code, `/work-history backfill` and `/work-history monthly` do the same.
-
-No agent? Add the repos you want to `approved` in the config, then run `npx work-history render backfill` once and `npx work-history render monthly` after that.
+No agent? Add the repos you want to `approved` in the config, then run `npx work-history sync --no-agent`, the first time and every time after.
 
 ## Commands
 
@@ -100,27 +98,30 @@ The folders you name are saved under `backfill` for the backfill to read. `init`
 | `--config <file>` | Config file to write. Default: `./work-history.config.json` |
 | `-y`, `--yes`     | Accept the detected values without prompts. Skips the scan. |
 
-### `work-history collect backfill`
+### `work-history sync`
 
-Reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
+Prints your changes as JSON Lines. Your log decides what a run reads:
 
-### `work-history collect monthly`
+- **No log, or no cursor in it: a backfill.** It reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
+- **A cursor (`<!-- last-scanned: YYYY-MM-DD -->`): an update.** It reads GitHub only, for the `approved` repos, from the cursor to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
 
-Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
-
-These options apply to both `collect` and `render`.
+The run says on stderr which of the two it is, `backfill` or `update`. A log that has project sections but no valid cursor stops the run with a usage error, so a lost cursor never turns into a backfill of a log in use: put the cursor back, or pass `--since` or `--full`. Use `--full` to backfill again when the log already has a cursor, for example after you add a clones folder or an old email to the config.
 
 | Option               | Description                                                                   |
 | -------------------- | ----------------------------------------------------------------------------- |
-| `--since YYYY-MM-DD` | Start of the window, exclusive. Default: 1970-01-01 (backfill) or the cursor. |
+| `--full`             | Read all your history again, even when the log has a cursor.                  |
+| `--since YYYY-MM-DD` | Start of the window, exclusive. Default: the cursor, or 1970-01-01 with none. |
 | `--until YYYY-MM-DD` | End of the window, inclusive, before today. Default: yesterday (UTC).         |
 | `--repo owner/name`  | Limit to one repo; repeat for more. Skips the `new-project` scan.             |
-| `--out <file>`       | `collect` only: write the JSON Lines to a file instead of stdout.             |
+| `--out <file>`       | Write the JSON Lines to a file instead of stdout. Not with `--no-agent`.      |
+| `--no-agent`         | Write the changes into your log instead of printing them. See below.          |
 | `--config <file>`    | Config file. Default: `./work-history.config.json`                            |
 
-### `work-history render backfill` and `work-history render monthly`
+### `--no-agent`
 
-Collects like `collect` with the same options, then writes the records into your log with no agent: one line per change under its project, newest first. Only `approved` repos get entries; copies go under their `canonical` repo. It moves the cursor, never back, and skips changes the log already links to, so running it twice adds nothing. It lists the repos with your work that are on neither list, for you to add to `approved` or `ignored`.
+`work-history sync --no-agent` reads the same changes with the same options, then writes them into your log with no agent: one line per change under its project, newest first. Only `approved` repos get entries; copies go under their `canonical` repo. It moves the cursor, never back, and skips changes the log already links to, so running it twice adds nothing. It lists the repos with your work that are on neither list, for you to add to `approved` or `ignored`.
+
+An update reads only from the cursor on. After you add a repo to `approved`, run `work-history sync --no-agent --full` once to bring in its earlier changes.
 
 Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad usage or an invalid config. A GitHub error such as a rate limit stops the run with no output, so a log never moves past changes the run could not read.
 
@@ -134,15 +135,15 @@ Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad 
 | `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                                               |
 | `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                                               |
 | `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.                               |
-| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                                                        |
-| `ignored`   | Repos the monthly run never suggests.                                                                                                                           |
+| `approved`  | Repos the update run reads. The skill adds repos when you approve them.                                                                                         |
+| `ignored`   | Repos the update run never suggests.                                                                                                                            |
 | `backfill`  | Local clones for the backfill: `folders` to scan and `noGit` folders, as paths such as `~/Projects`, and `remote`, `branches` and `aliases` for unusual clones. |
 
 Your config and log hold personal data, such as your emails. Keep them in a private repo.
 
 ## Output records
 
-`collect` prints one JSON object per line. Types are exported from the package (`import type { CollectRecord } from 'work-history'`).
+`sync` prints one JSON object per line. Types are exported from the package (`import type { CollectRecord } from 'work-history'`).
 
 | `type`        | Fields                                                                                                                        |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |

@@ -30,9 +30,9 @@ export interface Config {
   output: string
   /** Repos whose commits are copies of another repo's, mapped to that repo. */
   canonical: Record<string, string>
-  /** Repos the monthly run reads. */
+  /** Repos the update run reads. */
   approved: string[]
-  /** Repos the monthly run never reports as new. */
+  /** Repos the update run never reports as new. */
   ignored: string[]
   backfill: BackfillConfig
 }

@@ -48,17 +48,17 @@
     "approved": {
       "$ref": "#/$defs/repoList",
       "default": [],
-      "description": "Repos the monthly run reads. The agent adds repos here when you approve a new project."
+      "description": "Repos the update run reads. The agent adds repos here when you approve a new project."
     },
     "ignored": {
       "$ref": "#/$defs/repoList",
       "default": [],
-      "description": "Repos the monthly run never reports as new projects."
+      "description": "Repos the update run never reports as new projects."
     },
     "backfill": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Settings for `collect backfill`, which also reads local git clones.",
+      "description": "Settings for the backfill (the first `sync`, or `sync --full`), which also reads local git clones.",
       "properties": {
         "folders": {
           "type": "array",

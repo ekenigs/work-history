@@ -5,54 +5,76 @@ import type { LoadedConfig } from './config.ts'
 import { emailPattern, outputPath } from './config.ts'
 import { UsageError } from './errors.ts'
 import { parseCursor, today, yesterday } from './helpers.ts'
-import { monthly } from './monthly.ts'
 import type { CollectOptions, CollectRecord, Mode } from './types.ts'
+import { update } from './update.ts'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u
+const SECTION = /^## /mu
 
-export interface CollectArgs {
-  mode: Mode
+export interface RunArgs {
+  /** Read all history even when the log has a cursor. */
+  full: boolean
   since?: string | undefined
   until?: string | undefined
   repos: readonly string[]
 }
 
-function cursorSince(loaded: LoadedConfig): string {
+/** The window of a run and how it reads it. */
+export interface Run extends CollectOptions {
+  mode: Mode
+}
+
+/**
+ * The cursor in the log, or null when there is no log yet. A log that has
+ * project sections but no valid cursor has lost it: a backfill would add all
+ * history to a log in use, so the run needs `--since` or `--full` to say so.
+ */
+function readCursor(loaded: LoadedConfig, explicit: boolean): string | null {
   const file = outputPath(loaded)
-  const cursor = existsSync(file) ? parseCursor(readFileSync(file, 'utf8')) : null
-  if (cursor === null) {
+  if (!existsSync(file)) {
+    return null
+  }
+  const markdown = readFileSync(file, 'utf8')
+  const cursor = parseCursor(markdown)
+  if (cursor === null && !explicit && SECTION.test(markdown)) {
     throw new UsageError(
-      `no <!-- last-scanned: YYYY-MM-DD --> cursor in ${file}; pass --since or run backfill first`,
+      `${file} has entries but no valid <!-- last-scanned: YYYY-MM-DD --> cursor; put the cursor back, or pass --since or --full`,
     )
   }
   return cursor
 }
 
 /**
- * Fills in the window: backfill starts at 1970-01-01, monthly at the output
- * file's cursor. It ends at yesterday (UTC) at the latest: the cursor moves to
- * `until` and the next run starts after it, so a day still in progress would
- * lose whatever lands later that day.
+ * Picks the mode and fills in the window. A log with a cursor gets an update
+ * from that cursor; a log with none, or a run with `full`, gets a backfill
+ * from 1970-01-01. The window ends at yesterday (UTC) at the latest: the
+ * cursor moves to `until` and the next run starts after it, so a day still in
+ * progress would lose whatever lands later that day.
  */
-export function resolveOptions(loaded: LoadedConfig, args: CollectArgs): CollectOptions {
+export function resolveRun(loaded: LoadedConfig, args: RunArgs): Run {
+  const cursor = args.full ? null : readCursor(loaded, args.since !== undefined)
   const until = args.until ?? yesterday()
-  const since = args.since ?? (args.mode === 'backfill' ? '1970-01-01' : cursorSince(loaded))
+  const since = args.since ?? cursor ?? '1970-01-01'
   if (!DAY.test(since) || !DAY.test(until)) {
     throw new UsageError('--since and --until must be YYYY-MM-DD')
   }
   if (until >= today()) {
     throw new UsageError(`--until must be before today (${today()} UTC); that day is not over yet`)
   }
-  return { since, until, repos: args.repos }
+  return { mode: cursor === null ? 'backfill' : 'update', since, until, repos: args.repos }
 }
 
-/** Runs one collection and returns its records in output order. */
-export function collect(loaded: LoadedConfig, args: CollectArgs): CollectRecord[] {
-  const opts = resolveOptions(loaded, args)
+/** Runs one collection and returns its records in output order, the `run` record last. */
+export function collect(loaded: LoadedConfig, run: Run): CollectRecord[] {
   const { config } = loaded
-  return args.mode === 'backfill'
-    ? backfill(config, opts, emailPattern(config.emails))
-    : monthly(config, opts)
+  const records =
+    run.mode === 'backfill'
+      ? backfill(config, run, emailPattern(config.emails))
+      : update(config, run)
+  return [
+    ...records,
+    { type: 'run', mode: run.mode, since: run.since, until: run.until, warnings: [] },
+  ]
 }
 
 export function toJsonl(records: readonly CollectRecord[]): string {

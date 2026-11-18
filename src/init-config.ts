@@ -62,7 +62,7 @@ export function splitList(text: string): string[] {
   return unique(text.split(/[,\n]/u))
 }
 
-/** Answers win; the lists the monthly runs maintain are kept. */
+/** Answers win; the lists the update runs maintain are kept. */
 export function buildConfig(existing: Config | null, answers: Answers): ConfigFile {
   return {
     $schema: SCHEMA_URL,
@@ -76,7 +76,7 @@ export function buildConfig(existing: Config | null, answers: Answers): ConfigFi
   }
 }
 
-/** `buildConfig`, checked the way `collect` checks it, so init never writes a file it rejects. */
+/** `buildConfig`, checked the way a run checks it, so init never writes a file it rejects. */
 export function checkedConfig(file: string, existing: Config | null, answers: Answers): ConfigFile {
   const config = buildConfig(existing, answers)
   const result = parseConfig(config)
@@ -90,20 +90,18 @@ export function serialize(config: ConfigFile): string {
   return `${JSON.stringify(config, null, 2)}\n`
 }
 
-/** How to get a log from here; `collect` alone only prints records. */
+/** How to get a log from here; without `--no-agent` a run only prints records. */
 export function nextSteps(withSkill: boolean): string {
   const byHand = [
     'Without an agent, add repos to "approved" in the config, then run:',
-    '  work-history render backfill    once, to write your log',
-    '  work-history render monthly     every month after that',
+    '  work-history sync --no-agent    to write your log, and again to catch up',
   ]
   if (!withSkill) {
     return byHand.join('\n')
   }
   return [
     'In your agent, as a slash command or in plain words:',
-    '  /work-history backfill    once, to write your log',
-    '  /work-history monthly     every month after that',
+    '  /work-history    to write your log, and again to catch up',
     '',
     ...byHand,
   ].join('\n')

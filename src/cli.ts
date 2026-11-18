@@ -3,7 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { ParseArgsConfig } from 'node:util'
 import { parseArgs } from 'node:util'
 
-import { collect, toJsonl } from './collect.ts'
+import type { Run } from './collect.ts'
+import { collect, resolveRun, toJsonl } from './collect.ts'
 import type { LoadedConfig } from './config.ts'
 import { CONFIG_FILE, loadConfig, outputPath } from './config.ts'
 import { UsageError } from './errors.ts'
@@ -11,26 +12,29 @@ import { ghAuthenticated } from './exec.ts'
 import { init } from './init.ts'
 import type { RenderResult } from './render.ts'
 import { render } from './render.ts'
-import type { Mode } from './types.ts'
 
 const USAGE = `Usage:
   work-history init [--config <file>] [--yes]
-  work-history collect <backfill|monthly> [options]
-  work-history render <backfill|monthly> [options]
+  work-history sync [options]
 
 Commands:
-  init      Create or update ${CONFIG_FILE} with a guided setup.
-  collect   Print your changes as JSONL for an agent to write up.
-  render    Write your changes into the log directly, one line each, with no
-            agent. Only approved repos get entries.
+  init   Create or update ${CONFIG_FILE} with a guided setup.
+  sync   Print your changes as JSONL for an agent to write up. The first run
+         reads all your history: GitHub and your local clones. Once your log
+         has a cursor, a run reads the approved repos on GitHub from there.
 
-Collect and render options:
-  --since YYYY-MM-DD   Start of the window, exclusive. Default: 1970-01-01 for
-                       backfill; the cursor in the output file for monthly.
+Sync options:
+  --full               Read all your history again, even when the log has a
+                       cursor.
+  --no-agent           Write your changes into the log directly, one line each,
+                       with no agent. Only approved repos get entries.
+  --since YYYY-MM-DD   Start of the window, exclusive. Default: the cursor in the
+                       log, or 1970-01-01 with none or with --full.
   --until YYYY-MM-DD   End of the window, inclusive. Default: yesterday (UTC),
                        the last complete day.
   --repo owner/name    Limit to a repo; repeatable. Skips the new-project scan.
-  --out <file>         collect only: write JSONL to a file instead of stdout.
+  --out <file>         Write the JSONL to a file instead of stdout. Not with
+                       --no-agent.
 
 Common options:
   --config <file>      Config file. Default: ./${CONFIG_FILE}
@@ -49,6 +53,8 @@ const PARSE_CONFIG = {
     until: { type: 'string' },
     repo: { type: 'string', multiple: true },
     out: { type: 'string' },
+    full: { type: 'boolean' },
+    'no-agent': { type: 'boolean' },
     config: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
     help: { type: 'boolean', short: 'h' },
@@ -63,25 +69,29 @@ function version(): string {
   return typeof pkg === 'object' && pkg !== null && 'version' in pkg ? String(pkg.version) : ''
 }
 
-function collectFor(command: string, args: Args): { loaded: LoadedConfig; mode: Mode } {
-  const [, mode] = args.positionals
-  if (mode !== 'backfill' && mode !== 'monthly') {
-    throw new UsageError(`${command} needs a mode: backfill or monthly`)
-  }
+function loadFor(args: Args): LoadedConfig {
   const loaded = loadConfig(args.values.config ?? CONFIG_FILE)
   if (!ghAuthenticated()) {
     throw new UsageError('gh is not installed or not signed in; run `gh auth login`')
   }
-  return { loaded, mode }
+  return loaded
 }
 
-function collectArgs(mode: Mode, args: Args): Parameters<typeof collect>[1] {
-  return { mode, since: args.values.since, until: args.values.until, repos: args.values.repo ?? [] }
+/** Resolves the run and says on stderr which kind it is, since the log decides. */
+function runFor(loaded: LoadedConfig, args: Args): Run {
+  const run = resolveRun(loaded, {
+    full: args.values.full === true,
+    since: args.values.since,
+    until: args.values.until,
+    repos: args.values.repo ?? [],
+  })
+  process.stderr.write(`work-history: ${run.mode}, ${run.since} to ${run.until}\n`)
+  return run
 }
 
 function runCollect(args: Args): void {
-  const { loaded, mode } = collectFor('collect', args)
-  const text = toJsonl(collect(loaded, collectArgs(mode, args)))
+  const loaded = loadFor(args)
+  const text = toJsonl(collect(loaded, runFor(loaded, args)))
   if (args.values.out === undefined) {
     process.stdout.write(text)
   } else {
@@ -98,6 +108,8 @@ function renderSummary(result: RenderResult, file: string): string {
     lines.push(
       'Repos with your work on neither list; add each to approved or ignored in the config:',
       ...result.unsorted.map((repo) => `  ${repo}`),
+      'A run reads from the cursor on. After you approve a repo, bring in its earlier changes with:',
+      '  work-history sync --no-agent --full',
     )
   }
   if (result.warnings.length > 0) {
@@ -106,12 +118,12 @@ function renderSummary(result: RenderResult, file: string): string {
   return `${lines.join('\n')}\n`
 }
 
-function runRender(args: Args): void {
+function runNoAgent(args: Args): void {
   if (args.values.out !== undefined) {
-    throw new UsageError('--out is for collect; render writes to the output file in the config')
+    throw new UsageError('--out does not go with --no-agent, which writes to the log in the config')
   }
-  const { loaded, mode } = collectFor('render', args)
-  const records = collect(loaded, collectArgs(mode, args))
+  const loaded = loadFor(args)
+  const records = collect(loaded, runFor(loaded, args))
   const file = outputPath(loaded)
   const result = render(
     existsSync(file) ? readFileSync(file, 'utf8') : null,
@@ -122,19 +134,28 @@ function runRender(args: Args): void {
   process.stdout.write(renderSummary(result, file))
 }
 
+function runSync(args: Args): void {
+  if (args.values['no-agent'] === true) {
+    runNoAgent(args)
+  } else {
+    runCollect(args)
+  }
+}
+
 async function main(argv: readonly string[]): Promise<void> {
   const args = parseArgs({ ...PARSE_CONFIG, args: [...argv] })
-  const [command] = args.positionals
+  const [command, ...extra] = args.positionals
+  if (extra.length > 0) {
+    throw new UsageError(`unexpected argument: ${extra.join(' ')}`)
+  }
   if (args.values.version === true) {
     process.stdout.write(`${version()}\n`)
   } else if (args.values.help === true || command === undefined) {
     process.stdout.write(USAGE)
   } else if (command === 'init') {
     await init({ configPath: args.values.config ?? CONFIG_FILE, yes: args.values.yes === true })
-  } else if (command === 'collect') {
-    runCollect(args)
-  } else if (command === 'render') {
-    runRender(args)
+  } else if (command === 'sync') {
+    runSync(args)
   } else {
     throw new UsageError(`unknown command: ${command}`)
   }

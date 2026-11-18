@@ -9,39 +9,55 @@ The work-history file is the user's career log: every feature they shipped, grou
 
 `work-history.config.json` in the repo root (or the path the user gives) names the user's GitHub `login`, commit `emails`, the `output` file, and the `approved` and `ignored` repos. Read it first. If it is missing, ask the user to run `npx work-history init`.
 
-The CLI needs the GitHub CLI, signed in (`gh auth status`). It only reads: it never edits the config or the output file. You do.
+The CLI needs the GitHub CLI, signed in (`gh auth status`). Run as this skill says, it only reads: it never edits the config or the output file. You do. Do not pass `--no-agent`, which makes the CLI write the output file itself.
 
 ## Which run
 
-The user can name the run as an argument to this skill: `/work-history backfill` or `/work-history monthly`. A request in plain words ("backfill my work history", "run the monthly update") means the same.
+The CLI has one command, `npx work-history sync`, and the output file decides what it reads. Choose the run the same way:
 
-With no run named, choose by the output file: backfill when it does not exist yet or has no `<!-- last-scanned: YYYY-MM-DD -->` cursor, monthly otherwise.
+- **Backfill** when the output file does not exist yet or has no `<!-- last-scanned: YYYY-MM-DD -->` cursor.
+- **Update** otherwise.
 
-When the named run does not fit the output file, say so and ask before you go on: a `backfill` for a file that already has a cursor would add to a log that is in use, and a `monthly` for a file with no cursor has no start date.
+The `run` record's `mode` (`backfill` or `update`) says which one the CLI ran. If it is not the one you chose, stop and tell the user.
+
+`sync --full` backfills again for a file that already has a cursor. Run it only when the user asks for a full re-read (`/work-history full`, "re-read all my history"), say first that it adds to a log that is in use, and follow [Full re-read](#full-re-read), not the first-run steps.
+
+If the CLI stops because the output file has entries but no valid cursor, show the user the error and ask: put the cursor back, or do a full re-read.
 
 ## First run: backfill
 
-1. **Collect.** `npx work-history collect backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
+1. **Collect.** `npx work-history sync --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
 2. **Sort repos.** Each `repo` record is a project candidate. Show the user the repos with their counts and date ranges, in batches of up to 4 with `AskUserQuestion` when you have it: **Approve** or **Ignore**. Add the answers to `approved` or `ignored` in the config, keeping each list sorted.
 3. **Write.** Create the output file: a `# Work history` heading, the cursor line set to the `run` record's `until`, then a project section for each approved repo, with entries from its `change` records by the rubric.
 
-## Monthly run
+## Update run
 
 A run covers everything since the cursor in the output file. The cursor moves only when the run's changes land, so a late or missed run catches up by itself.
 
 1. **Gate.** If the output file sits in a git repo with a GitHub remote, `git fetch origin`. If `gh pr list --state open --json url,headRefName` lists a `work-history/` branch, stop and report "Merge or close <url> first." The CLI collects through yesterday (UTC), the last complete day. If the cursor is already that day or later, stop and report "Already scanned through <date>."
-2. **Branch.** In a git repo only: `git switch -c work-history/<YYYY-MM of today> origin/<default branch>`.
-3. **Collect.** `npx work-history collect monthly --out "$TMPDIR/work-history.jsonl"`.
-4. **New projects.** For each `new-project` record, ask the user, with its evidence in the question: **Approve**, **Ignore** or **Ask next month**. Add answered repos to `approved` or `ignored` in the config, keeping the lists sorted. Collect each newly approved repo with `npx work-history collect monthly --repo <repo> --since 1970-01-01` and give it a new project section. A run with `--repo` reads only that repo and prints no `new-project` records.
+2. **Branch.** In a git repo only: `git switch -c work-history/<YYYY-MM-DD of today> origin/<default branch>`.
+3. **Collect.** `npx work-history sync --out "$TMPDIR/work-history.jsonl"`.
+4. **New projects.** For each `new-project` record, ask the user, with its evidence in the question: **Approve**, **Ignore** or **Ask next time**. Add answered repos to `approved` or `ignored` in the config, keeping the lists sorted. Collect each newly approved repo with `npx work-history sync --repo <repo> --since 1970-01-01` and give it a new project section. A run with `--repo` reads only that repo and prints no `new-project` records.
 5. **Entries.** Apply the rubric to every `change` record. Done when each one is in a new entry, extends an existing entry, or is skipped under a named Skip rule.
 6. **Cursor.** Set the cursor to the `run` record's `until`.
-7. **Land.** Outside git, stop here and summarize the run. In git, commit the output file and the config as `Update work history through <until>`, push, and `gh pr create --title "Work history: <YYYY-MM>"`. Body: the window; each added or extended entry on one line; the repos the user sorted; the `run` record's warnings. A month with no qualifying work still gets the PR, with "No qualifying work" in the body.
+7. **Land.** Outside git, stop here and summarize the run. In git, commit the output file and the config as `Update work history through <until>`, push, and `gh pr create --title "Work history through <until>"`. Body: the window; each added or extended entry on one line; the repos the user sorted; the `run` record's warnings. A run with no qualifying work still gets the PR, with "No qualifying work" in the body.
+
+## Full re-read
+
+The output file stays: never create it again or drop what it holds.
+
+1. **Gate and branch** as in the update run, steps 1 and 2, but do not stop for a cursor that is already at yesterday.
+2. **Collect.** `npx work-history sync --full --out "$TMPDIR/work-history.jsonl"`. The `run` record's `mode` is `backfill`.
+3. **Sort repos.** Ask about each `repo` record that is on neither list, as in the first run. Leave the lists' other repos as they are.
+4. **Entries.** For each approved repo, apply the rubric to the `change` records the file does not link to yet: a new entry, an extended entry, or a skip under a named Skip rule. Add a project section for a repo that has none.
+5. **Cursor.** Set it to the `run` record's `until`, never back.
+6. **Land** as in the update run, step 7.
 
 ## Records
 
 The CLI prints JSON Lines. In order:
 
-- `new-project` (monthly only): `repo` and `evidence` lines for a repo on neither list.
+- `new-project` (update only): `repo` and `evidence` lines for a repo on neither list.
 - `repo`: one per repo, then its `change` records. `canonical` is set when the config maps this repo to another; `warnings` can hold `github-404`, `stale-clone`, `no-default-ref`, `no-own-commits` or `no-git`.
 - `change`: `kind` (`pr` or `commit`), `date`, `pr`, `sha`, `role` (`author` or `co-author`), `title`, `body`, `sources`, and `size` (`additions`, `deletions`, `files`) when known.
 - `run`: `mode`, `since`, `until` and `warnings`. Always last.
@@ -86,7 +102,7 @@ Rich entry:
 
 - **Order**: projects by last activity, newest first; entries newest first within a project.
 - **Project header**: `## <Name> (<owner/repo>)`, then a one-line description and the active date range. Update the range when a project gets new entries.
-- **Render drafts**: `npx work-history render` writes one line per change, such as `- **<PR title>** (YYYY-MM). [#N](…); +A/−D lines across F files.` When you work on a project that has such lines, fold them into feature entries by the rubric and keep their refs.
+- **Draft lines**: the CLI's `--no-agent` flag writes one line per change, such as `- **<PR title>** (YYYY-MM). [#N](…); +A/−D lines across F files.` When you work on a project that has such lines, fold them into feature entries by the rubric and keep their refs.
 - **Extend** an entry when new changes clearly continue it: widen its date range, add the refs and size, revise What and How only where the new changes add something, and add Verified only when the source says so. A one-liner that now meets the rich threshold becomes a rich entry. Old content stays.
 
 ### Wording
