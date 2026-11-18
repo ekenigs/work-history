@@ -1,0 +1,130 @@
+# work-history
+
+Keep a dated log of everything you shipped. `work-history` collects your merged pull requests and commits from GitHub (and, once, from your local clones), and an agent skill turns them into a Markdown file grouped by project, with links to every PR.
+
+The log is the raw material for a resume, a cover letter, a performance review or a promotion case: specific features with dates, the stack you used and how you verified them, instead of what you remember.
+
+```md
+## Acme Monorepo (acme/monorepo)
+
+The Acme web app and its API. 2025-03 → 2026-10.
+
+- **File uploads** (2026-09 → 2026-10). [#561](https://github.com/acme/monorepo/pull/561), [#690](https://github.com/acme/monorepo/pull/690); about +1840/−210 lines across 37 files.
+  - **What**: users drop PDFs on a form and see upload progress and a preview before submitting.
+  - **How**: a FileDropZone component sends files straight to storage with signed URLs; the form submits only the keys.
+  - **Stack**: TypeScript, React, S3.
+  - **Verified**: Playwright tests for drop, progress and cancel.
+- **Dark mode**: theme tokens and a toggle in the header. (2026-04)
+```
+
+## How it works
+
+1. The `work-history` CLI reads GitHub through the [GitHub CLI](https://cli.github.com/) and prints your changes as JSON Lines: one record per merged PR or direct commit, deduplicated across branches and copies. It only reads; it never writes your log.
+2. The `work-history` [agent skill](skills/work-history/SKILL.md) runs the CLI, asks you which new repos count, writes the entries with a fixed rubric (one entry per feature, facts from PR text only), moves the cursor, and opens a pull request with the update.
+
+Run it once to backfill your history, then once a month. A missed month catches up on the next run, because the cursor in the file only moves when an update lands.
+
+## Requirements
+
+- Node.js 24 or later.
+- The GitHub CLI, signed in: `gh auth login`.
+- A coding agent that loads skills from `.agents/skills` or `.claude/skills`, such as Claude Code.
+
+## Quick start
+
+> [!NOTE]
+> `work-history` is not on npm yet. Until it is, install it from source:
+>
+> ```bash
+> git clone https://github.com/ekenigs/work-history.git
+> cd work-history && pnpm install && pnpm build && pnpm link --global
+> ```
+>
+> Then use `work-history` wherever this README says `npx work-history`.
+
+In the repo (or folder) where you want to keep your log:
+
+```bash
+npx work-history init
+```
+
+`init` finds your GitHub login and commit emails, asks you to confirm them, writes `work-history.config.json`, and offers to install the agent skill into `.agents/skills/work-history` (linked from `.claude/skills`).
+
+Then ask your agent:
+
+> Backfill my work history.
+
+and once a month:
+
+> Run the monthly work-history update.
+
+## Commands
+
+### `work-history init`
+
+Creates or updates `work-history.config.json`. Running it again keeps your approved and ignored repos and backfill settings.
+
+| Option            | Description                                                 |
+| ----------------- | ----------------------------------------------------------- |
+| `--config <file>` | Config file to write. Default: `./work-history.config.json` |
+| `-y`, `--yes`     | Accept the detected values without prompts.                 |
+
+### `work-history collect backfill`
+
+Reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
+
+### `work-history collect monthly`
+
+Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to today. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
+
+| Option               | Description                                                                   |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `--since YYYY-MM-DD` | Start of the window, exclusive. Default: 1970-01-01 (backfill) or the cursor. |
+| `--until YYYY-MM-DD` | End of the window, inclusive. Default: today.                                 |
+| `--repo owner/name`  | Limit to one repo; repeat for more.                                           |
+| `--out <file>`       | Write the JSON Lines to a file instead of stdout.                             |
+| `--config <file>`    | Config file. Default: `./work-history.config.json`                            |
+
+Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad usage or an invalid config.
+
+## Configuration
+
+`work-history.config.json` is checked on every run, and [`schema.json`](schema.json) gives your editor completion and checks. See [`config.example.json`](config.example.json) for every field.
+
+| Field       | Description                                                                                                                        |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `login`     | Your GitHub login.                                                                                                                 |
+| `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                  |
+| `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                  |
+| `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.  |
+| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                           |
+| `ignored`   | Repos the monthly run never suggests.                                                                                              |
+| `backfill`  | Local clones for the backfill: `projectsRoot`, `localFolders`, `noGit`, and `remote`, `branches` and `aliases` for unusual clones. |
+
+Your config and log hold personal data, such as your emails. Keep them in a private repo.
+
+## Output records
+
+`collect` prints one JSON object per line. Types are exported from the package (`import type { CollectRecord } from 'work-history'`).
+
+| `type`        | Fields                                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `new-project` | `repo`, `evidence`: PR and commit lines from a repo on neither list.                                                          |
+| `repo`        | `repo`, `canonical`, `localPath`, `branches`, `description`, `first`, `last`, `counts`, `warnings`. Precedes its changes.     |
+| `change`      | `repo`, `kind` (`pr` or `commit`), `date`, `pr`, `sha`, `role` (`author` or `co-author`), `title`, `body`, `sources`, `size`. |
+| `run`         | `mode`, `since`, `until`, `warnings`. Always last.                                                                            |
+
+## Development
+
+```bash
+pnpm install
+pnpm check   # format, lint and type-check with Vite+ (Oxfmt, Oxlint)
+pnpm test    # Vitest
+pnpm build   # bundle to dist/ with vp pack
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)
