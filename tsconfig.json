@@ -11,10 +11,12 @@
     "moduleResolution": "nodenext",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "isolatedDeclarations": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "noEmit": true,
+    "declaration": true,
 
     // Type checking: core strictness
     "strict": true,

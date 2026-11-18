@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ekenigs/work-history/main/schema.json",
+  "login": "octocat",
+  "emails": ["octocat@example.com", "583231+octocat@users.noreply.github.com"],
+  "output": "work-history.md",
+  "canonical": {
+    "acme/ui": "acme/monorepo"
+  },
+  "approved": ["acme/monorepo", "octocat/dotfiles"],
+  "ignored": ["octocat/forked-experiment"],
+  "backfill": {
+    "projectsRoot": "~/Projects",
+    "localFolders": ["acme", "side-projects"],
+    "noGit": ["side-projects/sketches"],
+    "remote": {
+      "acme/monorepo": "acme/monorepo"
+    },
+    "branches": {
+      "acme/monorepo": ["main", "release"]
+    },
+    "aliases": {
+      "acme-old/*": "acme/*"
+    }
+  }
+}
