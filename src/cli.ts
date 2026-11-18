@@ -15,22 +15,27 @@ import type { Mode } from './types.ts'
 
 const USAGE = `Usage:
   work-history init [--config <file>] [--yes]
-  work-history collect <backfill|update> [options]
-  work-history render <backfill|update> [options]
+  work-history backfill [options]
+  work-history update [options]
 
 Commands:
-  init      Create or update ${CONFIG_FILE} with a guided setup.
-  collect   Print your changes as JSONL for an agent to write up.
-  render    Write your changes into the log directly, one line each, with no
-            agent. Only approved repos get entries.
+  init       Create or update ${CONFIG_FILE} with a guided setup.
+  backfill   Read all your history: GitHub and your local clones.
+  update     Read the approved repos on GitHub, from the cursor in your log.
 
-Collect and render options:
+Both print your changes as JSONL for an agent to write up. With --no-agent
+they write the log themselves.
+
+Backfill and update options:
+  --no-agent           Write your changes into the log directly, one line each,
+                       with no agent. Only approved repos get entries.
   --since YYYY-MM-DD   Start of the window, exclusive. Default: 1970-01-01 for
-                       backfill; the cursor in the output file for update.
+                       backfill; the cursor in the log for update.
   --until YYYY-MM-DD   End of the window, inclusive. Default: yesterday (UTC),
                        the last complete day.
   --repo owner/name    Limit to a repo; repeatable. Skips the new-project scan.
-  --out <file>         collect only: write JSONL to a file instead of stdout.
+  --out <file>         Write the JSONL to a file instead of stdout. Not with
+                       --no-agent.
 
 Common options:
   --config <file>      Config file. Default: ./${CONFIG_FILE}
@@ -49,6 +54,7 @@ const PARSE_CONFIG = {
     until: { type: 'string' },
     repo: { type: 'string', multiple: true },
     out: { type: 'string' },
+    'no-agent': { type: 'boolean' },
     config: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
     help: { type: 'boolean', short: 'h' },
@@ -63,24 +69,20 @@ function version(): string {
   return typeof pkg === 'object' && pkg !== null && 'version' in pkg ? String(pkg.version) : ''
 }
 
-function collectFor(command: string, args: Args): { loaded: LoadedConfig; mode: Mode } {
-  const [, mode] = args.positionals
-  if (mode !== 'backfill' && mode !== 'update') {
-    throw new UsageError(`${command} needs a mode: backfill or update`)
-  }
+function loadFor(args: Args): LoadedConfig {
   const loaded = loadConfig(args.values.config ?? CONFIG_FILE)
   if (!ghAuthenticated()) {
     throw new UsageError('gh is not installed or not signed in; run `gh auth login`')
   }
-  return { loaded, mode }
+  return loaded
 }
 
 function collectArgs(mode: Mode, args: Args): Parameters<typeof collect>[1] {
   return { mode, since: args.values.since, until: args.values.until, repos: args.values.repo ?? [] }
 }
 
-function runCollect(args: Args): void {
-  const { loaded, mode } = collectFor('collect', args)
+function runCollect(mode: Mode, args: Args): void {
+  const loaded = loadFor(args)
   const text = toJsonl(collect(loaded, collectArgs(mode, args)))
   if (args.values.out === undefined) {
     process.stdout.write(text)
@@ -106,11 +108,11 @@ function renderSummary(result: RenderResult, file: string): string {
   return `${lines.join('\n')}\n`
 }
 
-function runRender(args: Args): void {
+function runNoAgent(mode: Mode, args: Args): void {
   if (args.values.out !== undefined) {
-    throw new UsageError('--out is for collect; render writes to the output file in the config')
+    throw new UsageError('--out does not go with --no-agent, which writes to the log in the config')
   }
-  const { loaded, mode } = collectFor('render', args)
+  const loaded = loadFor(args)
   const records = collect(loaded, collectArgs(mode, args))
   const file = outputPath(loaded)
   const result = render(
@@ -131,10 +133,12 @@ async function main(argv: readonly string[]): Promise<void> {
     process.stdout.write(USAGE)
   } else if (command === 'init') {
     await init({ configPath: args.values.config ?? CONFIG_FILE, yes: args.values.yes === true })
-  } else if (command === 'collect') {
-    runCollect(args)
-  } else if (command === 'render') {
-    runRender(args)
+  } else if (command === 'backfill' || command === 'update') {
+    if (args.values['no-agent'] === true) {
+      runNoAgent(command, args)
+    } else {
+      runCollect(command, args)
+    }
   } else {
     throw new UsageError(`unknown command: ${command}`)
   }

@@ -83,7 +83,7 @@ describe(nextSteps, () => {
   })
 
   it('always shows how to write the log with no agent', () => {
-    expect(nextSteps(true)).toContain('work-history render backfill')
-    expect(nextSteps(false)).toContain('work-history render backfill')
+    expect(nextSteps(true)).toContain('work-history backfill --no-agent')
+    expect(nextSteps(false)).toContain('work-history backfill --no-agent')
   })
 })

@@ -21,7 +21,7 @@ When the named run does not fit the output file, say so and ask before you go on
 
 ## First run: backfill
 
-1. **Collect.** `npx work-history collect backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
+1. **Collect.** `npx work-history backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
 2. **Sort repos.** Each `repo` record is a project candidate. Show the user the repos with their counts and date ranges, in batches of up to 4 with `AskUserQuestion` when you have it: **Approve** or **Ignore**. Add the answers to `approved` or `ignored` in the config, keeping each list sorted.
 3. **Write.** Create the output file: a `# Work history` heading, the cursor line set to the `run` record's `until`, then a project section for each approved repo, with entries from its `change` records by the rubric.
 
@@ -31,8 +31,8 @@ A run covers everything since the cursor in the output file. The cursor moves on
 
 1. **Gate.** If the output file sits in a git repo with a GitHub remote, `git fetch origin`. If `gh pr list --state open --json url,headRefName` lists a `work-history/` branch, stop and report "Merge or close <url> first." The CLI collects through yesterday (UTC), the last complete day. If the cursor is already that day or later, stop and report "Already scanned through <date>."
 2. **Branch.** In a git repo only: `git switch -c work-history/<YYYY-MM-DD of today> origin/<default branch>`.
-3. **Collect.** `npx work-history collect update --out "$TMPDIR/work-history.jsonl"`.
-4. **New projects.** For each `new-project` record, ask the user, with its evidence in the question: **Approve**, **Ignore** or **Ask next time**. Add answered repos to `approved` or `ignored` in the config, keeping the lists sorted. Collect each newly approved repo with `npx work-history collect update --repo <repo> --since 1970-01-01` and give it a new project section. A run with `--repo` reads only that repo and prints no `new-project` records.
+3. **Collect.** `npx work-history update --out "$TMPDIR/work-history.jsonl"`.
+4. **New projects.** For each `new-project` record, ask the user, with its evidence in the question: **Approve**, **Ignore** or **Ask next time**. Add answered repos to `approved` or `ignored` in the config, keeping the lists sorted. Collect each newly approved repo with `npx work-history update --repo <repo> --since 1970-01-01` and give it a new project section. A run with `--repo` reads only that repo and prints no `new-project` records.
 5. **Entries.** Apply the rubric to every `change` record. Done when each one is in a new entry, extends an existing entry, or is skipped under a named Skip rule.
 6. **Cursor.** Set the cursor to the `run` record's `until`.
 7. **Land.** Outside git, stop here and summarize the run. In git, commit the output file and the config as `Update work history through <until>`, push, and `gh pr create --title "Work history through <until>"`. Body: the window; each added or extended entry on one line; the repos the user sorted; the `run` record's warnings. A run with no qualifying work still gets the PR, with "No qualifying work" in the body.
@@ -86,7 +86,7 @@ Rich entry:
 
 - **Order**: projects by last activity, newest first; entries newest first within a project.
 - **Project header**: `## <Name> (<owner/repo>)`, then a one-line description and the active date range. Update the range when a project gets new entries.
-- **Render drafts**: `npx work-history render` writes one line per change, such as `- **<PR title>** (YYYY-MM). [#N](…); +A/−D lines across F files.` When you work on a project that has such lines, fold them into feature entries by the rubric and keep their refs.
+- **Draft lines**: the CLI's `--no-agent` flag writes one line per change, such as `- **<PR title>** (YYYY-MM). [#N](…); +A/−D lines across F files.` When you work on a project that has such lines, fold them into feature entries by the rubric and keep their refs.
 - **Extend** an entry when new changes clearly continue it: widen its date range, add the refs and size, revise What and How only where the new changes add something, and add Verified only when the source says so. A one-liner that now meets the rich threshold becomes a rich entry. Old content stays.
 
 ### Wording

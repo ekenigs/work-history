@@ -76,7 +76,7 @@ export function buildConfig(existing: Config | null, answers: Answers): ConfigFi
   }
 }
 
-/** `buildConfig`, checked the way `collect` checks it, so init never writes a file it rejects. */
+/** `buildConfig`, checked the way a run checks it, so init never writes a file it rejects. */
 export function checkedConfig(file: string, existing: Config | null, answers: Answers): ConfigFile {
   const config = buildConfig(existing, answers)
   const result = parseConfig(config)
@@ -90,12 +90,12 @@ export function serialize(config: ConfigFile): string {
   return `${JSON.stringify(config, null, 2)}\n`
 }
 
-/** How to get a log from here; `collect` alone only prints records. */
+/** How to get a log from here; without `--no-agent` a run only prints records. */
 export function nextSteps(withSkill: boolean): string {
   const byHand = [
     'Without an agent, add repos to "approved" in the config, then run:',
-    '  work-history render backfill    once, to write your log',
-    '  work-history render update      whenever you want to catch up',
+    '  work-history backfill --no-agent    once, to write your log',
+    '  work-history update --no-agent      whenever you want to catch up',
   ]
   if (!withSkill) {
     return byHand.join('\n')

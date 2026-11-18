@@ -15,8 +15,8 @@ The config holds personal data, such as your emails and folder paths. Keep it in
 | `emails`    | `init`, from git and `gh`, plus the ones you type    | You start to commit with a new email.                   |
 | `output`    | `init`                                               | You move or rename the log.                             |
 | `canonical` | `init`, from the pairs it finds in your clones       | A copy is not cloned, or it squashes the commits.       |
-| `approved`  | The skill, when you approve a repo                   | You use `render` with no agent.                         |
-| `ignored`   | The skill, when you ignore a repo                    | You use `render` with no agent.                         |
+| `approved`  | The skill, when you approve a repo                   | You run with `--no-agent`.                              |
+| `ignored`   | The skill, when you ignore a repo                    | You run with `--no-agent`.                              |
 | `backfill`  | `init` fills in `folders`; nothing fills in the rest | A clone is unusual. See [Backfill settings](#backfill). |
 
 Running `init` again asks the same questions with your current values filled in. It keeps `approved`, `ignored` and the `backfill` settings it does not ask about.
@@ -79,9 +79,9 @@ A mapping goes one level deep. Map every copy to the final repo, not to another 
 A list of repos, as `owner/name`, that your log covers. Default: `[]`.
 
 - The update run reads only these repos.
-- `render` writes entries only for these repos.
+- `--no-agent` writes entries only for these repos.
 
-The skill adds a repo when you approve it. With no agent, add repos by hand before you run `render`.
+The skill adds a repo when you approve it. With no agent, add repos by hand before you run with `--no-agent`.
 
 ### `ignored`
 
@@ -93,7 +93,7 @@ The update run reports every repo you worked in that is on neither list as a new
 
 ## Backfill settings
 
-`backfill` holds the settings for `collect backfill` and `render backfill`, which read your local clones as well as GitHub. The update run does not use them.
+`backfill` holds the settings for `work-history backfill`, which reads your local clones as well as GitHub. The update run does not use them.
 
 Clones add what GitHub cannot show for your login:
 
