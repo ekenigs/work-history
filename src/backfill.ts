@@ -1,8 +1,9 @@
 import type { Config } from './config.ts'
 import { dedupe } from './dedupe.ts'
+import { noGitRecord, readmeLine } from './folder.ts'
 import { branchCommits, mergedPrs, reachableRepos, repoInfo } from './github.ts'
 import { byDate, groupByRepo, repoKey, summarize } from './helpers.ts'
-import { localChanges, localRepos, noGitRecord, readmeLine } from './local.ts'
+import { localChanges, localRepos } from './local.ts'
 import type { Change, CollectOptions, CollectRecord, RepoRecord } from './types.ts'
 
 interface RepoMeta {

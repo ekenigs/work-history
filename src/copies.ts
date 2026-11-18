@@ -66,9 +66,32 @@ export function findCopies(keys: ReadonlyMap<string, ReadonlySet<string>>): Copy
   return pairs
 }
 
+/** The repo at the end of a chain of mappings; a loop ends where it would repeat. */
+function finalSource(canonical: Readonly<Record<string, string>>, repo: string): string {
+  const seen = new Set([repo])
+  let source = repo
+  let next = canonical[source]
+  while (next !== undefined && !seen.has(next)) {
+    seen.add(next)
+    source = next
+    next = canonical[source]
+  }
+  return source
+}
+
+/** Maps every copy straight to its final source: the map is read one level deep. */
+function flattened(canonical: Readonly<Record<string, string>>): Record<string, string> {
+  return Object.fromEntries(
+    Object.keys(canonical)
+      .map((copy) => [copy, finalSource(canonical, copy)] as const)
+      .filter(([copy, source]) => copy !== source),
+  )
+}
+
 /**
  * The `canonical` map after the user's choice for one pair: `source` is the
  * repo the work counts under, or null when the two are counted separately.
+ * A choice that would chain mappings (a copy of a copy) is flattened.
  */
 export function withChoice(
   canonical: Readonly<Record<string, string>>,
@@ -82,7 +105,7 @@ export function withChoice(
   if (source !== null) {
     out[source === pair.other ? pair.likelySource : pair.other] = source
   }
-  return out
+  return flattened(out)
 }
 
 /** The choice the config already holds for a pair; undefined when it has none. */

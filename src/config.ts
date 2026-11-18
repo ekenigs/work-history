@@ -69,6 +69,11 @@ export function isEmail(value: string): boolean {
   return EMAIL.test(value)
 }
 
+/** True for a path that means the same folder from any working directory. */
+export function isFullPath(value: string): boolean {
+  return path.isAbsolute(value) || value === '~' || value.startsWith('~/')
+}
+
 type Obj = Record<string, unknown>
 
 function isObject(value: unknown): value is Obj {
@@ -135,6 +140,21 @@ class Reader {
     return map
   }
 
+  /** Backfill paths must mean the same folder from any working directory. */
+  public fullPaths(backfill: Omit<BackfillConfig, 'aliases'>): void {
+    const paths = {
+      folders: backfill.folders,
+      noGit: backfill.noGit,
+      remote: Object.keys(backfill.remote),
+      branches: Object.keys(backfill.branches),
+    }
+    for (const [key, dirs] of Object.entries(paths)) {
+      for (const dir of dirs.filter((item) => !isFullPath(item))) {
+        this.issues.push(`backfill.${key}: "${dir}" is not a full path; start it with / or ~`)
+      }
+    }
+  }
+
   public arrayMap(obj: Obj, key: string): Record<string, string[]> {
     const value = obj[key] ?? {}
     if (!isObject(value) || !Object.values(value).every((item) => isStringArray(item))) {
@@ -169,11 +189,15 @@ function readBackfill(reader: Reader, raw: unknown): BackfillConfig {
     )
   }
   reader.unknownKeys(obj, new Set([...BACKFILL_KEYS, ...RETIRED_BACKFILL_KEYS]), 'backfill.')
-  return {
+  const backfill = {
     folders: reader.strings(obj, 'folders'),
     noGit: reader.strings(obj, 'noGit'),
     remote: reader.stringMap(obj, 'remote'),
     branches: reader.arrayMap(obj, 'branches'),
+  }
+  reader.fullPaths(backfill)
+  return {
+    ...backfill,
     aliases: reader.stringMap(obj, 'aliases', REPO),
   }
 }

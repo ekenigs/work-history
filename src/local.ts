@@ -1,5 +1,5 @@
 import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
@@ -11,12 +11,11 @@ import {
   hasCoAuthorTrailer,
   inWindow,
   isOwnEmail,
-  isoDay,
   repoFromRemoteUrl,
   resolveAlias,
   stripPrSuffix,
 } from './helpers.ts'
-import type { Change, RepoRecord, Role } from './types.ts'
+import type { Change, Role } from './types.ts'
 
 /** How deep under a configured folder to look for git repos. */
 const SCAN_DEPTH = 3
@@ -46,7 +45,7 @@ function forPath<T>(map: Readonly<Record<string, T>>, absPath: string): T | unde
 }
 
 /** A folder's entries; none when it cannot be read. */
-function entries(dir: string): Dirent[] {
+export function entries(dir: string): Dirent[] {
   try {
     return readdirSync(dir, { withFileTypes: true })
   } catch {
@@ -54,7 +53,7 @@ function entries(dir: string): Dirent[] {
   }
 }
 
-function isScannable(name: string): boolean {
+export function isScannable(name: string): boolean {
   return name !== 'node_modules' && !name.startsWith('.')
 }
 
@@ -96,30 +95,65 @@ function isStale(absPath: string): boolean {
   return !existsSync(fetchHead) || statSync(fetchHead).mtimeMs < Date.now() - STALE_MS
 }
 
-/** A clone found under `folder`; with no remote to name it, its path under that folder does. */
-function localRepo(cfg: BackfillConfig, folder: string, absPath: string): LocalRepo {
-  const pathName = path.relative(folder, absPath) || path.basename(absPath)
-  const originUrl = tryRun('git', ['remote', 'get-url', 'origin'], absPath) ?? ''
-  const raw = forPath(cfg.remote, absPath) ?? repoFromRemoteUrl(originUrl) ?? pathName
-  const refs = resolveLocalRefs(absPath, forPath(cfg.branches, absPath))
-  const warnings: string[] = []
-  if (isStale(absPath)) {
-    warnings.push('stale-clone')
-  }
-  if (refs.length === 0) {
-    warnings.push('no-default-ref')
-  }
-  return { absPath, repo: resolveAlias(raw, cfg.aliases), refs, warnings }
+function cloneWarnings(absPath: string, refs: readonly string[]): string[] {
+  const stale = isStale(absPath) ? ['stale-clone'] : []
+  return refs.length === 0 ? [...stale, 'no-default-ref'] : stale
 }
 
-/** Every git clone under the configured folders, skipping `noGit` ones; each clone once. */
+/**
+ * A name for a clone with no remote: its path under `folder`, with more of
+ * its full path in front while another such clone has that name.
+ */
+function pathName(folder: string, absPath: string, taken: ReadonlySet<string>): string {
+  const parts = absPath.split(path.sep).filter((part) => part !== '')
+  const least = Math.max(1, path.relative(folder, absPath).split(path.sep).length)
+  const names = parts
+    .map((_part, index) => parts.slice(index).join('/'))
+    .filter((_name, index) => parts.length - index >= least)
+    .toReversed()
+  return names.find((name) => !taken.has(name)) ?? absPath
+}
+
+/**
+ * A clone found under `folder`. With no remote to name it, its path does, and
+ * that name is added to `pathNames` so the next such clone gets another.
+ */
+function localRepo(
+  cfg: BackfillConfig,
+  { folder, absPath }: { folder: string; absPath: string },
+  pathNames: Set<string>,
+): LocalRepo {
+  const originUrl = tryRun('git', ['remote', 'get-url', 'origin'], absPath) ?? ''
+  const known = forPath(cfg.remote, absPath) ?? repoFromRemoteUrl(originUrl)
+  const raw = known ?? pathName(folder, absPath, pathNames)
+  if (known === null) {
+    pathNames.add(raw)
+  }
+  const refs = resolveLocalRefs(absPath, forPath(cfg.branches, absPath))
+  return {
+    absPath,
+    repo: resolveAlias(raw, cfg.aliases),
+    refs,
+    warnings: cloneWarnings(absPath, refs),
+  }
+}
+
+/**
+ * Every git clone under the configured folders, skipping `noGit` ones; each
+ * clone once. Outer folders are read first, so a clone with no remote has the
+ * same name in whatever order the folders are listed.
+ */
 export function localRepos(cfg: BackfillConfig): LocalRepo[] {
   const skipped = new Set(cfg.noGit.map((folder) => resolveDir(folder)))
+  const folders = [...new Set(cfg.folders.map((dir) => resolveDir(dir)))].toSorted(
+    (a, b) => a.length - b.length || a.localeCompare(b),
+  )
   const found = new Map<string, LocalRepo>()
-  for (const folder of cfg.folders.map((dir) => resolveDir(dir))) {
+  const pathNames = new Set<string>()
+  for (const folder of folders) {
     const clones = skipped.has(folder) ? [] : findGitDirs(folder, SCAN_DEPTH)
     for (const absPath of clones.filter((dir) => !found.has(dir))) {
-      found.set(absPath, localRepo(cfg, folder, absPath))
+      found.set(absPath, localRepo(cfg, { folder, absPath }, pathNames))
     }
   }
   return [...found.values()]
@@ -214,84 +248,4 @@ export function localChanges(repo: LocalRepo, window: LocalWindow): Change[] {
     seen.add(entry.sha)
   }
   return out
-}
-
-/** A file's text; null when it is missing, a folder, or unreadable. */
-function readText(file: string): string | null {
-  try {
-    return readFileSync(file, 'utf8')
-  } catch {
-    return null
-  }
-}
-
-/** First prose line of a folder's README. */
-export function readmeLine(dir: string): string | null {
-  const readme = entries(dir).find(
-    (entry) => !entry.isDirectory() && /^readme(?:\.md)?$/iu.test(entry.name),
-  )
-  const text = readme === undefined ? null : readText(path.join(dir, readme.name))
-  if (text === null) {
-    return null
-  }
-  const line = text
-    .split('\n')
-    .map((row) => row.replace(/^#+\s*/u, '').trim())
-    .find((row) => row !== '' && !row.startsWith('<') && !row.startsWith('!['))
-  return line ?? null
-}
-
-/** The day a file last changed; none for a dangling link or a file that cannot be read. */
-function modifiedDay(file: string): string[] {
-  try {
-    return [isoDay(new Date(statSync(file).mtimeMs).toISOString())]
-  } catch {
-    return []
-  }
-}
-
-function fileDays(dir: string): string[] {
-  return entries(dir)
-    .filter((entry) => isScannable(entry.name))
-    .flatMap((entry) => {
-      const file = path.join(dir, entry.name)
-      return entry.isDirectory() ? fileDays(file) : modifiedDay(file)
-    })
-}
-
-/** A package.json's content; null when it is missing or not JSON. */
-function parsePackage(text: string | null): unknown {
-  try {
-    return text === null ? null : JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-function packageDescription(dir: string): string | null {
-  const parsed = parsePackage(readText(path.join(dir, 'package.json')))
-  const description =
-    typeof parsed === 'object' && parsed !== null && 'description' in parsed
-      ? parsed.description
-      : null
-  return typeof description === 'string' ? description : null
-}
-
-/** A folder without git, dated by its files. */
-export function noGitRecord(folder: string): RepoRecord {
-  const dir = resolveDir(folder)
-  const exists = existsSync(dir)
-  const days = exists ? fileDays(dir).toSorted() : []
-  return {
-    type: 'repo',
-    repo: `local:${folder}`,
-    canonical: null,
-    localPath: dir,
-    branches: [],
-    description: exists ? (packageDescription(dir) ?? readmeLine(dir)) : null,
-    first: days.at(0) ?? null,
-    last: days.at(-1) ?? null,
-    counts: { author: 0, 'co-author': 0 },
-    warnings: ['no-git'],
-  }
 }

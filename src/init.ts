@@ -17,7 +17,14 @@ import {
 } from '@clack/prompts'
 
 import type { BackfillConfig, Config } from './config.ts'
-import { DEFAULT_OUTPUT, emailPattern, emptyBackfill, isEmail, isLogin } from './config.ts'
+import {
+  DEFAULT_OUTPUT,
+  emailPattern,
+  emptyBackfill,
+  isEmail,
+  isFullPath,
+  isLogin,
+} from './config.ts'
 import type { CopyPair } from './copies.ts'
 import { currentChoice, findCopies, keysByRepo, withChoice } from './copies.ts'
 import { CancelledError, UsageError } from './errors.ts'
@@ -123,7 +130,12 @@ function isFolder(dir: string): boolean {
 }
 
 function validFolders(value: string | undefined): string | undefined {
-  const missing = splitList(value ?? '').find((folder) => !isFolder(folder))
+  const folders = splitList(value ?? '')
+  const relative = folders.find((folder) => !isFullPath(folder))
+  if (relative !== undefined) {
+    return `${relative} is not a full path; start it with / or ~`
+  }
+  const missing = folders.find((folder) => !isFolder(folder))
   return missing === undefined ? undefined : `${missing} is not a folder`
 }
 

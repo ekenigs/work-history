@@ -72,7 +72,7 @@ The CLI already merges commits that have the same hash. This map covers what a h
 
 `init` compares your commits across your local clones and asks about each pair that shares them. Add a pair by hand when one of the repos is not cloned, or when the copy squashes commits, because `init` cannot see those.
 
-A mapping goes one level deep. Map every copy to the final repo, not to another copy.
+A mapping goes one level deep. Map every copy to the final repo, not to another copy. `init` does this for the pairs it asks about.
 
 ### `approved`
 
@@ -103,7 +103,7 @@ Clones add what GitHub cannot show for your login:
 
 Only `folders` matters for most people. The other four are for clones that the scan gets wrong, and nothing fills them in for you.
 
-Paths in this section are full paths. `~` stands for your home folder.
+Paths in this section are full paths. `~` stands for your home folder. A path that starts with neither `/` nor `~` is rejected, because it would point at a different folder each time you run the CLI from another place.
 
 ### `backfill.folders`
 
@@ -141,7 +141,7 @@ An object that maps a clone's path to its `owner/name` on GitHub. Default: `{}`.
 }
 ```
 
-Use it when a clone has no `origin` remote, or when `origin` is not a `github.com` URL. Without it, such a clone is named by its path under the scanned folder, and its work is not joined with the same repo on GitHub.
+Use it when a clone has no `origin` remote, or when `origin` is not a `github.com` URL. Without it, such a clone is named by its path under the scanned folder, and its work is not joined with the same repo on GitHub. When scanned folders overlap, the outermost one names the clone. When two such clones would get the same name, the second gets more of its path in front, such as `b/tool`.
 
 ### `backfill.branches`
 

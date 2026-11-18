@@ -87,6 +87,26 @@ describe(parseConfig, () => {
     expect(issues[1]).toMatch(/^backfill\.localFolders: replaced by backfill\.folders/u)
   })
 
+  it('rejects backfill paths that depend on the working directory', () => {
+    expect(
+      issuesOf({
+        login: 'ada',
+        emails: ['ada@work.example'],
+        backfill: {
+          folders: ['~/Projects', '/srv/code', 'acme'],
+          noGit: ['side-projects/sketches'],
+          remote: { 'acme/monorepo': 'acme/monorepo' },
+          branches: { './monorepo': ['main'] },
+        },
+      }),
+    ).toStrictEqual([
+      'backfill.folders: "acme" is not a full path; start it with / or ~',
+      'backfill.noGit: "side-projects/sketches" is not a full path; start it with / or ~',
+      'backfill.remote: "acme/monorepo" is not a full path; start it with / or ~',
+      'backfill.branches: "./monorepo" is not a full path; start it with / or ~',
+    ])
+  })
+
   it('rejects wrong types', () => {
     expect(issuesOf([])).toStrictEqual(['expected a JSON object'])
     expect(issuesOf({ login: 1, emails: 'a@b.c' })).toStrictEqual([

@@ -58,11 +58,28 @@ describe(withChoice, () => {
 
   it('replaces the pair’s old mapping and keeps the others', () => {
     const canonical = { 'acme/ui': 'acme/monorepo', 'acme/docs': 'acme/monorepo' }
+    expect(withChoice(canonical, pair, 'acme/monorepo')).toStrictEqual(canonical)
     expect(withChoice(canonical, pair, 'acme/ui')).toStrictEqual({
-      'acme/docs': 'acme/monorepo',
+      'acme/docs': 'acme/ui',
       'acme/monorepo': 'acme/ui',
     })
     expect(withChoice(canonical, pair, null)).toStrictEqual({ 'acme/docs': 'acme/monorepo' })
+  })
+
+  it('points a copy of the new copy at the new source', () => {
+    const canonical = { 'acme/ui-mirror': 'acme/monorepo' }
+    expect(withChoice(canonical, pair, 'acme/ui')).toStrictEqual({
+      'acme/ui-mirror': 'acme/ui',
+      'acme/monorepo': 'acme/ui',
+    })
+  })
+
+  it('follows the mapping the chosen source already has', () => {
+    const canonical = { 'acme/ui': 'acme/design' }
+    expect(withChoice(canonical, pair, 'acme/ui')).toStrictEqual({
+      'acme/ui': 'acme/design',
+      'acme/monorepo': 'acme/design',
+    })
   })
 })
 
