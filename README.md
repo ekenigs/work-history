@@ -19,16 +19,37 @@ The Acme web app and its API. 2025-03 → 2026-10.
 
 ## How it works
 
-1. The `work-history` CLI reads GitHub through the [GitHub CLI](https://cli.github.com/) and prints your changes as JSON Lines: one record per merged PR or direct commit, deduplicated across branches and copies. It only reads; it never writes your log.
+1. The `work-history` CLI reads GitHub through the [GitHub CLI](https://cli.github.com/) and prints your changes as JSON Lines: one record per merged PR or direct commit, deduplicated across branches and copies. `collect` only reads; it never writes your log.
 2. The `work-history` [agent skill](skills/work-history/SKILL.md) runs the CLI, asks you which new repos count, writes the entries with a fixed rubric (one entry per feature, facts from PR text only), moves the cursor, and opens a pull request with the update.
 
 Run it once to backfill your history, then once a month. A missed month catches up on the next run, because the cursor in the file only moves when an update lands.
+
+### Why a coding agent
+
+The CLI gives you facts: titles, dates, links and line counts. A useful log needs judgment that no fixed rule gets right:
+
+- **Grouping.** A feature often lands as several PRs over weeks: a schema change, the API, the UI, a follow-up fix. Seeing that they are one feature means reading them together.
+- **Summarizing.** What and How come from PR descriptions written for reviewers, in any shape or length. The agent turns them into two plain sentences and reads the diff when a PR says nothing.
+- **Filtering.** A review fix, a revert or a one-line config change can look like real work by its title. Telling them apart takes reading the change.
+- **Sorting repos.** Deciding which repos count is your call; the agent asks you and records the answers.
+
+The skill is plain Markdown in the open [Agent Skills](https://agentskills.io) format, so any agent that loads skills can run it, not only Claude Code.
+
+### Without an agent
+
+`work-history render` writes the log itself, one line per change, from the same records:
+
+```md
+- **Add file uploads** (2026-09). [#561](https://github.com/acme/monorepo/pull/561); +1840/−210 lines across 37 files.
+```
+
+It skips obvious noise (dependency bumps, merge, WIP and lint commits), writes only `approved` repos and moves the cursor. You get a complete, linked log with no AI involved, but a flat one: a feature built in five PRs takes five lines, and nothing says what or how. An agent can merge those lines into entries later.
 
 ## Requirements
 
 - Node.js 24 or later.
 - The GitHub CLI, signed in: `gh auth login`.
-- A coding agent that loads skills from `.agents/skills` or `.claude/skills`, such as Claude Code.
+- A coding agent that loads skills from `.agents/skills` or `.claude/skills`, such as Claude Code, Codex or Cursor. Without one, use [`render`](#without-an-agent).
 
 ## Quick start
 
@@ -58,6 +79,8 @@ and once a month:
 
 > Run the monthly work-history update.
 
+No agent? Add the repos you want to `approved` in the config, then run `npx work-history render backfill` once and `npx work-history render monthly` after that.
+
 ## Commands
 
 ### `work-history init`
@@ -77,13 +100,19 @@ Reads all your history: merged PRs across GitHub, direct commits on your repos' 
 
 Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
 
+These options apply to both `collect` and `render`.
+
 | Option               | Description                                                                   |
 | -------------------- | ----------------------------------------------------------------------------- |
 | `--since YYYY-MM-DD` | Start of the window, exclusive. Default: 1970-01-01 (backfill) or the cursor. |
 | `--until YYYY-MM-DD` | End of the window, inclusive, before today. Default: yesterday (UTC).         |
 | `--repo owner/name`  | Limit to one repo; repeat for more. Skips the `new-project` scan.             |
-| `--out <file>`       | Write the JSON Lines to a file instead of stdout.                             |
+| `--out <file>`       | `collect` only: write the JSON Lines to a file instead of stdout.             |
 | `--config <file>`    | Config file. Default: `./work-history.config.json`                            |
+
+### `work-history render backfill` and `work-history render monthly`
+
+Collects like `collect` with the same options, then writes the records into your log with no agent: one line per change under its project, newest first. Only `approved` repos get entries; copies go under their `canonical` repo. It moves the cursor, never back, and skips changes the log already links to, so running it twice adds nothing. It lists the repos with your work that are on neither list, for you to add to `approved` or `ignored`.
 
 Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad usage or an invalid config. A GitHub error such as a rate limit stops the run with no output, so a log never moves past changes the run could not read.
 

@@ -80,6 +80,7 @@ Rich entry:
 
 - **Order**: projects by last activity, newest first; entries newest first within a project.
 - **Project header**: `## <Name> (<owner/repo>)`, then a one-line description and the active date range. Update the range when a project gets new entries.
+- **Render drafts**: `npx work-history render` writes one line per change, such as `- **<PR title>** (YYYY-MM). [#N](…); +A/−D lines across F files.` When you work on a project that has such lines, fold them into feature entries by the rubric and keep their refs.
 - **Extend** an entry when new changes clearly continue it: widen its date range, add the refs and size, revise What and How only where the new changes add something, and add Verified only when the source says so. A one-liner that now meets the rich threshold becomes a rich entry. Old content stays.
 
 ### Wording
