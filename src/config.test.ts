@@ -46,8 +46,7 @@ describe(parseConfig, () => {
         approved: [],
         ignored: [],
         backfill: {
-          projectsRoot: '~/Projects',
-          localFolders: [],
+          folders: [],
           noGit: [],
           remote: {},
           branches: {},
@@ -74,6 +73,37 @@ describe(parseConfig, () => {
       'backfill.typo: unknown key',
       'login: "not a login" is not a GitHub login',
       'emails: list at least one email',
+    ])
+  })
+
+  it('says what replaced the folder settings of older configs', () => {
+    const issues = issuesOf({
+      login: 'ada',
+      emails: ['ada@work.example'],
+      backfill: { projectsRoot: '~/Projects', localFolders: ['acme'] },
+    })
+    expect(issues).toHaveLength(2)
+    expect(issues[0]).toMatch(/^backfill\.projectsRoot: replaced by backfill\.folders/u)
+    expect(issues[1]).toMatch(/^backfill\.localFolders: replaced by backfill\.folders/u)
+  })
+
+  it('rejects backfill paths that depend on the working directory', () => {
+    expect(
+      issuesOf({
+        login: 'ada',
+        emails: ['ada@work.example'],
+        backfill: {
+          folders: ['~/Projects', '/srv/code', 'acme'],
+          noGit: ['side-projects/sketches'],
+          remote: { 'acme/monorepo': 'acme/monorepo' },
+          branches: { './monorepo': ['main'] },
+        },
+      }),
+    ).toStrictEqual([
+      'backfill.folders: "acme" is not a full path; start it with / or ~',
+      'backfill.noGit: "side-projects/sketches" is not a full path; start it with / or ~',
+      'backfill.remote: "acme/monorepo" is not a full path; start it with / or ~',
+      'backfill.branches: "./monorepo" is not a full path; start it with / or ~',
     ])
   })
 

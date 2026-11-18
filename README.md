@@ -73,7 +73,7 @@ In the repo (or folder) where you want to keep your log:
 npx work-history init
 ```
 
-`init` finds your GitHub login and commit emails, asks you to confirm them, writes `work-history.config.json`, and offers to install the agent skill into `.agents/skills/work-history` (linked from `.claude/skills`).
+`init` finds your GitHub login and commit emails, asks you to confirm them, asks which folders hold your local clones, writes `work-history.config.json`, and offers to install the agent skill into `.agents/skills/work-history` (linked from `.claude/skills`).
 
 Then ask your agent:
 
@@ -83,6 +83,8 @@ and once a month:
 
 > Run the monthly work-history update.
 
+In an agent that runs skills as slash commands, such as Claude Code, `/work-history backfill` and `/work-history monthly` do the same.
+
 No agent? Add the repos you want to `approved` in the config, then run `npx work-history render backfill` once and `npx work-history render monthly` after that.
 
 ## Commands
@@ -91,10 +93,12 @@ No agent? Add the repos you want to `approved` in the config, then run `npx work
 
 Creates or updates `work-history.config.json`. Running it again keeps your approved and ignored repos and backfill settings.
 
+The folders you name are saved under `backfill` for the backfill to read. `init` also compares your commits across the clones in them. When two repos share commits (a mirror, a fork, a package split out of a monorepo), it asks which repo that work counts under and saves your answer in `canonical`. It can only compare repos you have cloned, and it misses a copy that squashes commits, so add those pairs to `canonical` by hand.
+
 | Option            | Description                                                 |
 | ----------------- | ----------------------------------------------------------- |
 | `--config <file>` | Config file to write. Default: `./work-history.config.json` |
-| `-y`, `--yes`     | Accept the detected values without prompts.                 |
+| `-y`, `--yes`     | Accept the detected values without prompts. Skips the scan. |
 
 ### `work-history collect backfill`
 
@@ -122,17 +126,17 @@ Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad 
 
 ## Configuration
 
-`work-history.config.json` is checked on every run, and [`schema.json`](schema.json) gives your editor completion and checks. See [`config.example.json`](config.example.json) for every field.
+`work-history.config.json` is checked on every run, and [`schema.json`](schema.json) gives your editor completion and checks. [docs/config.md](docs/config.md) explains every property: what it does, what fills it in, and when to edit it by hand. See [`config.example.json`](config.example.json) for a filled-in example.
 
-| Field       | Description                                                                                                                        |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `login`     | Your GitHub login.                                                                                                                 |
-| `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                  |
-| `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                  |
-| `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.  |
-| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                           |
-| `ignored`   | Repos the monthly run never suggests.                                                                                              |
-| `backfill`  | Local clones for the backfill: `projectsRoot`, `localFolders`, `noGit`, and `remote`, `branches` and `aliases` for unusual clones. |
+| Field       | Description                                                                                                                                                     |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `login`     | Your GitHub login.                                                                                                                                              |
+| `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                                               |
+| `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                                               |
+| `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.                               |
+| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                                                        |
+| `ignored`   | Repos the monthly run never suggests.                                                                                                                           |
+| `backfill`  | Local clones for the backfill: `folders` to scan and `noGit` folders, as paths such as `~/Projects`, and `remote`, `branches` and `aliases` for unusual clones. |
 
 Your config and log hold personal data, such as your emails. Keep them in a private repo.
 

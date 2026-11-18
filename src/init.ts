@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,23 +12,41 @@ import {
   multiselect,
   note,
   outro,
+  select,
   text,
 } from '@clack/prompts'
 
-import type { Config } from './config.ts'
-import { DEFAULT_OUTPUT, isEmail, isLogin } from './config.ts'
+import type { BackfillConfig, Config } from './config.ts'
+import {
+  DEFAULT_OUTPUT,
+  emailPattern,
+  emptyBackfill,
+  isEmail,
+  isFullPath,
+  isLogin,
+} from './config.ts'
+import type { CopyPair } from './copies.ts'
+import { currentChoice, findCopies, keysByRepo, withChoice } from './copies.ts'
 import { CancelledError, UsageError } from './errors.ts'
 import { ghAuthenticated } from './exec.ts'
 import type { Answers, Detected } from './init-config.ts'
 import {
+  checkedConfig,
   detect,
-  formatCanonical,
-  parseCanonical,
+  nextSteps,
   readExisting,
   serialize,
   splitList,
-  checkedConfig,
 } from './init-config.ts'
+import { expandHome, localRepos } from './local.ts'
+
+/** The folder offered for clones when the config names none and it exists. */
+const USUAL_CLONES = '~/Projects'
+
+/** `canonical` only takes `owner/name`; a clone with no GitHub remote has none. */
+const REPO = /^[\w.-]+\/[\w.-]+$/u
+/** The answer that counts the two repos of a pair separately. */
+const SEPARATE = ''
 
 export interface InitOptions {
   configPath: string
@@ -67,6 +85,7 @@ function defaults(existing: Config | null, detected: Detected): Answers {
     emails: existing?.emails ?? detected.emails,
     output: existing?.output ?? DEFAULT_OUTPUT,
     canonical: existing?.canonical ?? {},
+    backfill: existing?.backfill ?? emptyBackfill(),
   }
 }
 
@@ -82,7 +101,7 @@ async function pickEmails(choices: readonly string[], known: readonly string[]):
   }
   return answered(
     await multiselect({
-      message: 'Which emails do you commit with?',
+      message: 'Which emails do you commit with? (you can add others next)',
       options: choices.map((email) => ({ value: email, label: email })),
       initialValues: known.length > 0 ? known : choices,
       required: false,
@@ -102,32 +121,89 @@ async function askEmails(known: readonly string[], detected: readonly string[]):
   return [...new Set([...picked, ...splitList(extra)])]
 }
 
-function canonicalError(value: string | undefined): string | undefined {
-  const parsed = parseCanonical(value ?? '')
-  return typeof parsed === 'string' ? parsed : undefined
+function isFolder(dir: string): boolean {
+  try {
+    return statSync(expandHome(dir)).isDirectory()
+  } catch {
+    return false
+  }
 }
 
-async function askCanonical(
-  current: Readonly<Record<string, string>>,
-): Promise<Record<string, string>> {
+function validFolders(value: string | undefined): string | undefined {
+  const folders = splitList(value ?? '')
+  const relative = folders.find((folder) => !isFullPath(folder))
+  if (relative !== undefined) {
+    return `${relative} is not a full path; start it with / or ~`
+  }
+  const missing = folders.find((folder) => !isFolder(folder))
+  return missing === undefined ? undefined : `${missing} is not a folder`
+}
+
+/** The folders to offer: the config's, or the usual one when it exists. */
+function knownFolders(backfill: BackfillConfig): string[] {
+  return backfill.folders.length === 0 && isFolder(USUAL_CLONES) ? [USUAL_CLONES] : backfill.folders
+}
+
+async function askFolders(backfill: BackfillConfig): Promise<BackfillConfig> {
   const answer = answered(
     await text({
-      message:
-        'Do some repos carry copies of another repo’s commits? Map each copy to its source (optional)',
-      placeholder: 'acme/ui=acme/monorepo, acme/docs=acme/monorepo',
-      initialValue: formatCanonical(current),
-      validate: canonicalError,
+      message: 'Folders that hold your local clones (comma separated, optional)',
+      placeholder: '~/Projects, ~/work',
+      initialValue: knownFolders(backfill).join(', '),
+      validate: validFolders,
     }),
   )
-  const parsed = parseCanonical(answer)
-  return typeof parsed === 'string' ? {} : parsed
+  return { ...backfill, folders: splitList(answer) }
+}
+
+/** The pairs of GitHub repos in the local clones that share the user's commits. */
+function detectCopies(backfill: BackfillConfig, emails: readonly string[]): CopyPair[] {
+  const repos = localRepos(backfill)
+  if (repos.length === 0 || emails.length === 0) {
+    return []
+  }
+  log.step(`Comparing your commits in ${String(repos.length)} local clones`)
+  return findCopies(keysByRepo(repos, emailPattern(emails))).filter(
+    (pair) => REPO.test(pair.likelySource) && REPO.test(pair.other),
+  )
+}
+
+async function askPair(pair: CopyPair, preset: string): Promise<string | null> {
+  const { likelySource, other, shared } = pair
+  const answer = answered(
+    await select({
+      message: `${other} and ${likelySource} share ${String(shared)} of your commits. Count that work under:`,
+      options: [
+        { value: likelySource, label: likelySource },
+        { value: other, label: other },
+        { value: SEPARATE, label: 'Both: they are separate work' },
+      ],
+      initialValue: preset,
+    }),
+  )
+  return answer === SEPARATE ? null : answer
+}
+
+/** Asks which repo each detected pair counts under; mappings for other repos are kept. */
+async function askCopies(
+  start: Answers,
+  pairs: readonly CopyPair[],
+  firstRun: boolean,
+): Promise<Record<string, string>> {
+  let { canonical } = start
+  for (const pair of pairs) {
+    const preset = currentChoice(canonical, pair) ?? (firstRun ? pair.likelySource : SEPARATE)
+    // oxlint-disable-next-line no-await-in-loop -- the prompts are asked one after another
+    canonical = withChoice(canonical, pair, await askPair(pair, preset))
+  }
+  return canonical
 }
 
 function validLogin(value: string | undefined): string | undefined {
   return isLogin((value ?? '').trim()) ? undefined : 'Enter a GitHub login, such as octocat'
 }
 
-async function ask(start: Answers, detected: Detected): Promise<Answers> {
+async function ask(start: Answers, detected: Detected, firstRun: boolean): Promise<Answers> {
   const login = answered(
     await text({ message: 'GitHub login', initialValue: start.login, validate: validLogin }),
   )
@@ -139,8 +215,9 @@ async function ask(start: Answers, detected: Detected): Promise<Answers> {
       defaultValue: DEFAULT_OUTPUT,
     }),
   )
-  const canonical = await askCanonical(start.canonical)
-  return { login: login.trim(), emails, output: output.trim(), canonical }
+  const backfill = await askFolders(start.backfill)
+  const canonical = await askCopies(start, detectCopies(backfill, emails), firstRun)
+  return { login: login.trim(), emails, output: output.trim(), canonical, backfill }
 }
 
 function checkAnswers(answers: Answers): void {
@@ -185,7 +262,7 @@ async function gather(
   }
   const detected = detect(path.dirname(file))
   const start = defaults(existing, detected)
-  const answers = yes ? start : await ask(start, detected)
+  const answers = yes ? start : await ask(start, detected, existing === null)
   checkAnswers(answers)
   return { existing, answers }
 }
@@ -201,13 +278,7 @@ async function setup(options: InitOptions): Promise<void> {
   for (const written of skillFiles) {
     log.success(`Wrote ${shown(written)}`)
   }
-  note(
-    [
-      'All history, once:  work-history collect backfill --out backfill.jsonl',
-      'Every month:        ask your agent to run the work-history skill',
-    ].join('\n'),
-    'Next steps',
-  )
+  note(nextSteps(withSkill), 'Next steps')
 }
 
 /** Guided setup of the config file and, optionally, the agent skill. */

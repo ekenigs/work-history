@@ -25,8 +25,7 @@ function loaded(markdown: string | null): LoadedConfig {
       approved: [],
       ignored: [],
       backfill: {
-        projectsRoot: '~/Projects',
-        localFolders: [],
+        folders: [],
         noGit: [],
         remote: {},
         branches: {},

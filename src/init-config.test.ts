@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vite-plus/test'
 
 import type { Config } from './config.ts'
-import { parseConfig, SCHEMA_URL } from './config.ts'
+import { emptyBackfill, parseConfig, SCHEMA_URL } from './config.ts'
 import { ConfigError } from './errors.ts'
-import {
-  buildConfig,
-  checkedConfig,
-  formatCanonical,
-  parseCanonical,
-  serialize,
-  splitList,
-} from './init-config.ts'
+import { buildConfig, checkedConfig, nextSteps, serialize, splitList } from './init-config.ts'
 
 function validConfig(raw: unknown): Config {
   const result = parseConfig(raw)
@@ -25,6 +18,7 @@ const answers = {
   emails: ['ada@work.example'],
   output: 'history.md',
   canonical: { 'acme/ui': 'acme/monorepo' },
+  backfill: emptyBackfill(),
 }
 
 describe(splitList, () => {
@@ -36,26 +30,6 @@ describe(splitList, () => {
   })
 })
 
-describe('canonical mappings', () => {
-  const map = { 'acme/ui': 'acme/monorepo', 'acme/docs': 'acme/monorepo' }
-
-  it('parses copy=source pairs', () => {
-    expect(parseCanonical('acme/ui=acme/monorepo, acme/docs = acme/monorepo')).toStrictEqual(map)
-  })
-
-  it('formats a map back to text', () => {
-    expect(formatCanonical(map)).toBe('acme/ui=acme/monorepo, acme/docs=acme/monorepo')
-  })
-
-  it('accepts an empty answer', () => {
-    expect(parseCanonical('')).toStrictEqual({})
-  })
-
-  it.each(['acme/ui', 'acme/ui=monorepo', 'a/b=c/d=e/f'])('rejects %j', (text) => {
-    expect(parseCanonical(text)).toBeTypeOf('string')
-  })
-})
-
 describe(buildConfig, () => {
   it('writes a valid config with the schema link for a first run', () => {
     const config = buildConfig(null, answers)
@@ -64,20 +38,21 @@ describe(buildConfig, () => {
     expect(parseConfig(written)).toHaveProperty('config.output', 'history.md')
   })
 
-  it('keeps the lists and backfill settings of an existing config', () => {
+  it('keeps the lists of an existing config and takes the backfill settings from the answers', () => {
     const existing = validConfig({
       login: 'old',
       emails: ['old@x.example'],
       approved: ['acme/monorepo'],
       ignored: ['acme/fork'],
-      backfill: { localFolders: ['acme'] },
+      backfill: { folders: ['~/acme'] },
     })
-    expect(buildConfig(existing, answers)).toMatchObject({
+    const backfill = { ...existing.backfill, folders: ['~/acme', '~/side'] }
+    expect(buildConfig(existing, { ...answers, backfill })).toMatchObject({
       login: 'ada',
       emails: ['ada@work.example'],
       approved: ['acme/monorepo'],
       ignored: ['acme/fork'],
-      backfill: { localFolders: ['acme'] },
+      backfill: { folders: ['~/acme', '~/side'] },
     })
   })
 
@@ -98,5 +73,17 @@ describe(checkedConfig, () => {
     expect(() =>
       checkedConfig('config.json', null, { ...answers, emails: ['ada@@work.example'] }),
     ).toThrow(/emails/u)
+  })
+})
+
+describe(nextSteps, () => {
+  it('names the slash commands only when the skill is installed', () => {
+    expect(nextSteps(true)).toContain('/work-history backfill')
+    expect(nextSteps(false)).not.toContain('/work-history')
+  })
+
+  it('always shows how to write the log with no agent', () => {
+    expect(nextSteps(true)).toContain('work-history render backfill')
+    expect(nextSteps(false)).toContain('work-history render backfill')
   })
 })

@@ -1,11 +1,9 @@
 import { existsSync } from 'node:fs'
 
-import type { Config } from './config.ts'
-import { DEFAULT_OUTPUT, emptyBackfill, parseConfig, readJsonFile, SCHEMA_URL } from './config.ts'
+import type { BackfillConfig, Config } from './config.ts'
+import { DEFAULT_OUTPUT, parseConfig, readJsonFile, SCHEMA_URL } from './config.ts'
 import { ConfigError } from './errors.ts'
 import { tryRun } from './exec.ts'
-
-const REPO = /^[\w.-]+\/[\w.-]+$/u
 
 export interface Detected {
   login: string | null
@@ -17,6 +15,7 @@ export interface Answers {
   emails: string[]
   output: string
   canonical: Record<string, string>
+  backfill: BackfillConfig
 }
 
 /** The config file as written to disk. */
@@ -63,26 +62,7 @@ export function splitList(text: string): string[] {
   return unique(text.split(/[,\n]/u))
 }
 
-/** `copy/repo=main/repo, …` to a map; an error string for a malformed pair. */
-export function parseCanonical(text: string): Record<string, string> | string {
-  const map: Record<string, string> = {}
-  for (const pair of splitList(text)) {
-    const [copy = '', main = '', ...rest] = pair.split('=').map((part) => part.trim())
-    if (rest.length > 0 || !REPO.test(copy) || !REPO.test(main)) {
-      return `"${pair}" is not owner/copy=owner/main`
-    }
-    map[copy] = main
-  }
-  return map
-}
-
-export function formatCanonical(map: Readonly<Record<string, string>>): string {
-  return Object.entries(map)
-    .map(([copy, main]) => `${copy}=${main}`)
-    .join(', ')
-}
-
-/** Answers win; lists the monthly runs maintain and backfill settings are kept. */
+/** Answers win; the lists the monthly runs maintain are kept. */
 export function buildConfig(existing: Config | null, answers: Answers): ConfigFile {
   return {
     $schema: SCHEMA_URL,
@@ -92,7 +72,7 @@ export function buildConfig(existing: Config | null, answers: Answers): ConfigFi
     canonical: answers.canonical,
     approved: existing?.approved ?? [],
     ignored: existing?.ignored ?? [],
-    backfill: existing?.backfill ?? emptyBackfill(),
+    backfill: answers.backfill,
   }
 }
 
@@ -108,4 +88,23 @@ export function checkedConfig(file: string, existing: Config | null, answers: An
 
 export function serialize(config: ConfigFile): string {
   return `${JSON.stringify(config, null, 2)}\n`
+}
+
+/** How to get a log from here; `collect` alone only prints records. */
+export function nextSteps(withSkill: boolean): string {
+  const byHand = [
+    'Without an agent, add repos to "approved" in the config, then run:',
+    '  work-history render backfill    once, to write your log',
+    '  work-history render monthly     every month after that',
+  ]
+  if (!withSkill) {
+    return byHand.join('\n')
+  }
+  return [
+    'In your agent, as a slash command or in plain words:',
+    '  /work-history backfill    once, to write your log',
+    '  /work-history monthly     every month after that',
+    '',
+    ...byHand,
+  ].join('\n')
 }
