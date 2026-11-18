@@ -9,11 +9,9 @@ export const DEFAULT_OUTPUT = 'work-history.md'
 
 /** Settings that only the backfill (local git) mode reads. */
 export interface BackfillConfig {
-  /** Folder that holds the local clones; `~` expands to the home folder. */
-  projectsRoot: string
-  /** Folders under `projectsRoot` to scan for git repos, up to three levels deep. */
-  localFolders: string[]
-  /** Folders without git; reported with file dates only. */
+  /** Folders to scan for git clones, up to three levels deep; `~` expands to the home folder. */
+  folders: string[]
+  /** Folders without git, as paths; reported with file dates only. */
   noGit: string[]
   /** `owner/name` for a clone whose `origin` remote is missing or wrong, keyed by its path. */
   remote: Record<string, string>
@@ -59,14 +57,9 @@ const TOP_KEYS = new Set([
   'ignored',
   'backfill',
 ])
-const BACKFILL_KEYS = new Set([
-  'projectsRoot',
-  'localFolders',
-  'noGit',
-  'remote',
-  'branches',
-  'aliases',
-])
+const BACKFILL_KEYS = new Set(['folders', 'noGit', 'remote', 'branches', 'aliases'])
+/** Keys from before `folders`; a config that still has them gets told what replaced them. */
+const RETIRED_BACKFILL_KEYS = ['projectsRoot', 'localFolders']
 
 export function isLogin(value: string): boolean {
   return LOGIN.test(value)
@@ -156,8 +149,7 @@ class Reader {
 
 export function emptyBackfill(): BackfillConfig {
   return {
-    projectsRoot: '~/Projects',
-    localFolders: [],
+    folders: [],
     noGit: [],
     remote: {},
     branches: {},
@@ -171,10 +163,14 @@ function readBackfill(reader: Reader, raw: unknown): BackfillConfig {
     reader.issues.push('backfill: expected an object')
     return emptyBackfill()
   }
-  reader.unknownKeys(obj, BACKFILL_KEYS, 'backfill.')
+  for (const key of RETIRED_BACKFILL_KEYS.filter((retired) => retired in obj)) {
+    reader.issues.push(
+      `backfill.${key}: replaced by backfill.folders, a list of full paths such as "~/Projects"; noGit, remote and branches take full paths too`,
+    )
+  }
+  reader.unknownKeys(obj, new Set([...BACKFILL_KEYS, ...RETIRED_BACKFILL_KEYS]), 'backfill.')
   return {
-    projectsRoot: reader.string(obj, 'projectsRoot', '~/Projects'),
-    localFolders: reader.strings(obj, 'localFolders'),
+    folders: reader.strings(obj, 'folders'),
     noGit: reader.strings(obj, 'noGit'),
     remote: reader.stringMap(obj, 'remote'),
     branches: reader.arrayMap(obj, 'branches'),

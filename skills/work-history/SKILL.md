@@ -21,7 +21,7 @@ When the named run does not fit the output file, say so and ask before you go on
 
 ## First run: backfill
 
-1. **Collect.** `npx work-history collect backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.localFolders` is set, their local clones.
+1. **Collect.** `npx work-history collect backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
 2. **Sort repos.** Each `repo` record is a project candidate. Show the user the repos with their counts and date ranges, in batches of up to 4 with `AskUserQuestion` when you have it: **Approve** or **Ignore**. Add the answers to `approved` or `ignored` in the config, keeping each list sorted.
 3. **Write.** Create the output file: a `# Work history` heading, the cursor line set to the `run` record's `until`, then a project section for each approved repo, with entries from its `change` records by the rubric.
 

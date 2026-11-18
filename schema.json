@@ -60,34 +60,29 @@
       "additionalProperties": false,
       "description": "Settings for `collect backfill`, which also reads local git clones.",
       "properties": {
-        "projectsRoot": {
-          "type": "string",
-          "default": "~/Projects",
-          "description": "Folder that holds your local clones; ~ expands to your home folder."
-        },
-        "localFolders": {
+        "folders": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Folders under projectsRoot to scan for git repos, up to three levels deep."
+          "description": "Folders to scan for git clones, up to three levels deep, such as ~/Projects; ~ expands to your home folder."
         },
         "noGit": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "Folders without git, reported with file dates only."
+          "description": "Folders without git, as paths; reported with file dates only."
         },
         "remote": {
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/repo" },
           "default": {},
-          "description": "owner/name for clones whose origin remote is missing or wrong, keyed by path under projectsRoot."
+          "description": "owner/name for clones whose origin remote is missing or wrong, keyed by the clone's path."
         },
         "branches": {
           "type": "object",
           "additionalProperties": { "type": "array", "items": { "type": "string" } },
           "default": {},
-          "description": "Branches to read instead of the default branch, keyed by clone path or owner/name."
+          "description": "Branches to read instead of the default branch, keyed by the clone's path."
         },
         "aliases": {
           "type": "object",

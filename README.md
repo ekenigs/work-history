@@ -128,15 +128,15 @@ Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad 
 
 `work-history.config.json` is checked on every run, and [`schema.json`](schema.json) gives your editor completion and checks. See [`config.example.json`](config.example.json) for every field.
 
-| Field       | Description                                                                                                                        |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `login`     | Your GitHub login.                                                                                                                 |
-| `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                  |
-| `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                  |
-| `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.  |
-| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                           |
-| `ignored`   | Repos the monthly run never suggests.                                                                                              |
-| `backfill`  | Local clones for the backfill: `projectsRoot`, `localFolders`, `noGit`, and `remote`, `branches` and `aliases` for unusual clones. |
+| Field       | Description                                                                                                                                                     |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `login`     | Your GitHub login.                                                                                                                                              |
+| `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                                               |
+| `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                                               |
+| `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.                               |
+| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                                                        |
+| `ignored`   | Repos the monthly run never suggests.                                                                                                                           |
+| `backfill`  | Local clones for the backfill: `folders` to scan and `noGit` folders, as paths such as `~/Projects`, and `remote`, `branches` and `aliases` for unusual clones. |
 
 Your config and log hold personal data, such as your emails. Keep them in a private repo.
 

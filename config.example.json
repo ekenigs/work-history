@@ -9,14 +9,13 @@
   "approved": ["acme/monorepo", "octocat/dotfiles"],
   "ignored": ["octocat/forked-experiment"],
   "backfill": {
-    "projectsRoot": "~/Projects",
-    "localFolders": ["acme", "side-projects"],
-    "noGit": ["side-projects/sketches"],
+    "folders": ["~/Projects/acme", "~/Projects/side-projects"],
+    "noGit": ["~/Projects/side-projects/sketches"],
     "remote": {
-      "acme/monorepo": "acme/monorepo"
+      "~/Projects/acme/monorepo": "acme/monorepo"
     },
     "branches": {
-      "acme/monorepo": ["main", "release"]
+      "~/Projects/acme/monorepo": ["main", "release"]
     },
     "aliases": {
       "acme-old/*": "acme/*"

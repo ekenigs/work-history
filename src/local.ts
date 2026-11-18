@@ -35,6 +35,16 @@ export function expandHome(dir: string): string {
   return dir.startsWith('~') ? path.join(homedir(), dir.slice(1)) : dir
 }
 
+/** A folder from the config as an absolute path. */
+export function resolveDir(dir: string): string {
+  return path.resolve(expandHome(dir))
+}
+
+/** The config value keyed by a clone's path, however that path is written. */
+function forPath<T>(map: Readonly<Record<string, T>>, absPath: string): T | undefined {
+  return Object.entries(map).find(([dir]) => resolveDir(dir) === absPath)?.[1]
+}
+
 /** A folder's entries; none when it cannot be read. */
 function entries(dir: string): Dirent[] {
   try {
@@ -86,11 +96,12 @@ function isStale(absPath: string): boolean {
   return !existsSync(fetchHead) || statSync(fetchHead).mtimeMs < Date.now() - STALE_MS
 }
 
-function localRepo(cfg: BackfillConfig, root: string, absPath: string): LocalRepo {
-  const relPath = path.relative(root, absPath)
+/** A clone found under `folder`; with no remote to name it, its path under that folder does. */
+function localRepo(cfg: BackfillConfig, folder: string, absPath: string): LocalRepo {
+  const pathName = path.relative(folder, absPath) || path.basename(absPath)
   const originUrl = tryRun('git', ['remote', 'get-url', 'origin'], absPath) ?? ''
-  const raw = cfg.remote[relPath] ?? repoFromRemoteUrl(originUrl) ?? relPath
-  const refs = resolveLocalRefs(absPath, cfg.branches[relPath])
+  const raw = forPath(cfg.remote, absPath) ?? repoFromRemoteUrl(originUrl) ?? pathName
+  const refs = resolveLocalRefs(absPath, forPath(cfg.branches, absPath))
   const warnings: string[] = []
   if (isStale(absPath)) {
     warnings.push('stale-clone')
@@ -101,12 +112,17 @@ function localRepo(cfg: BackfillConfig, root: string, absPath: string): LocalRep
   return { absPath, repo: resolveAlias(raw, cfg.aliases), refs, warnings }
 }
 
-/** Every git clone under the configured folders, skipping `noGit` ones. */
-export function localRepos(cfg: BackfillConfig, root: string): LocalRepo[] {
-  return cfg.localFolders
-    .filter((folder) => !cfg.noGit.includes(folder))
-    .flatMap((folder) => findGitDirs(path.join(root, folder), SCAN_DEPTH))
-    .map((absPath) => localRepo(cfg, root, absPath))
+/** Every git clone under the configured folders, skipping `noGit` ones; each clone once. */
+export function localRepos(cfg: BackfillConfig): LocalRepo[] {
+  const skipped = new Set(cfg.noGit.map((folder) => resolveDir(folder)))
+  const found = new Map<string, LocalRepo>()
+  for (const folder of cfg.folders.map((dir) => resolveDir(dir))) {
+    const clones = skipped.has(folder) ? [] : findGitDirs(folder, SCAN_DEPTH)
+    for (const absPath of clones.filter((dir) => !found.has(dir))) {
+      found.set(absPath, localRepo(cfg, folder, absPath))
+    }
+  }
+  return [...found.values()]
 }
 
 const FS = '\u001F'
@@ -262,8 +278,8 @@ function packageDescription(dir: string): string | null {
 }
 
 /** A folder without git, dated by its files. */
-export function noGitRecord(root: string, folder: string): RepoRecord {
-  const dir = path.join(root, folder)
+export function noGitRecord(folder: string): RepoRecord {
+  const dir = resolveDir(folder)
   const exists = existsSync(dir)
   const days = exists ? fileDays(dir).toSorted() : []
   return {

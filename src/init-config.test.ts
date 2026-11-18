@@ -3,15 +3,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import type { Config } from './config.ts'
 import { emptyBackfill, parseConfig, SCHEMA_URL } from './config.ts'
 import { ConfigError } from './errors.ts'
-import {
-  buildConfig,
-  checkedConfig,
-  listFolders,
-  nextSteps,
-  serialize,
-  splitList,
-  withFolders,
-} from './init-config.ts'
+import { buildConfig, checkedConfig, nextSteps, serialize, splitList } from './init-config.ts'
 
 function validConfig(raw: unknown): Config {
   const result = parseConfig(raw)
@@ -38,36 +30,6 @@ describe(splitList, () => {
   })
 })
 
-describe(withFolders, () => {
-  const backfill = { ...emptyBackfill(), projectsRoot: '/srv/code', localFolders: ['acme'] }
-
-  it('lists the scanned folders as paths', () => {
-    expect(listFolders(backfill)).toStrictEqual(['/srv/code/acme'])
-  })
-
-  it('changes nothing when the folders are the same', () => {
-    expect(withFolders(backfill, ['/srv/code/acme'])).toBe(backfill)
-  })
-
-  it('scans a single folder from its own root', () => {
-    expect(withFolders(backfill, ['/srv/other'])).toMatchObject({
-      projectsRoot: '/srv/other',
-      localFolders: ['.'],
-    })
-  })
-
-  it('puts several folders under the folder they share', () => {
-    expect(
-      withFolders(backfill, ['/srv/code/acme', '/srv/code/side/x', '/srv/code']),
-    ).toMatchObject({ projectsRoot: '/srv/code', localFolders: ['acme', 'side/x', '.'] })
-  })
-
-  it('clears the folders for an empty answer and keeps the other settings', () => {
-    const cleared = withFolders({ ...backfill, noGit: ['acme/sketches'] }, [])
-    expect(cleared).toMatchObject({ localFolders: [], noGit: ['acme/sketches'] })
-  })
-})
-
 describe(buildConfig, () => {
   it('writes a valid config with the schema link for a first run', () => {
     const config = buildConfig(null, answers)
@@ -82,15 +44,15 @@ describe(buildConfig, () => {
       emails: ['old@x.example'],
       approved: ['acme/monorepo'],
       ignored: ['acme/fork'],
-      backfill: { localFolders: ['acme'] },
+      backfill: { folders: ['~/acme'] },
     })
-    const backfill = { ...existing.backfill, localFolders: ['acme', 'side'] }
+    const backfill = { ...existing.backfill, folders: ['~/acme', '~/side'] }
     expect(buildConfig(existing, { ...answers, backfill })).toMatchObject({
       login: 'ada',
       emails: ['ada@work.example'],
       approved: ['acme/monorepo'],
       ignored: ['acme/fork'],
-      backfill: { localFolders: ['acme', 'side'] },
+      backfill: { folders: ['~/acme', '~/side'] },
     })
   })
 

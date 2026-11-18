@@ -2,7 +2,7 @@ import type { Config } from './config.ts'
 import { dedupe } from './dedupe.ts'
 import { branchCommits, mergedPrs, reachableRepos, repoInfo } from './github.ts'
 import { byDate, groupByRepo, repoKey, summarize } from './helpers.ts'
-import { expandHome, localChanges, localRepos, noGitRecord, readmeLine } from './local.ts'
+import { localChanges, localRepos, noGitRecord, readmeLine } from './local.ts'
 import type { Change, CollectOptions, CollectRecord, RepoRecord } from './types.ts'
 
 interface RepoMeta {
@@ -64,10 +64,7 @@ class Backfill {
   }
 
   public readLocal(pattern: string): void {
-    const root = expandHome(this.cfg.backfill.projectsRoot)
-    for (const local of localRepos(this.cfg.backfill, root).filter((item) =>
-      this.wants(item.repo),
-    )) {
+    for (const local of localRepos(this.cfg.backfill).filter((item) => this.wants(item.repo))) {
       const repo = this.nameOf(local.repo)
       const meta = this.metaFor(repo, local.absPath)
       meta.branches.push(...local.refs.map((ref) => ref.replace('refs/remotes/', '')))
@@ -148,10 +145,9 @@ export function backfill(cfg: Config, opts: CollectOptions, pattern: string): Co
   run.readLocal(pattern)
   run.readPrs()
   run.readCommits()
-  const root = expandHome(cfg.backfill.projectsRoot)
   return [
     ...repoRecords(cfg, run.meta, run.changes),
-    ...cfg.backfill.noGit.map((folder) => noGitRecord(root, folder)),
+    ...cfg.backfill.noGit.map((folder) => noGitRecord(folder)),
     { type: 'run', mode: 'backfill', since: opts.since, until: opts.until, warnings: [] },
   ]
 }

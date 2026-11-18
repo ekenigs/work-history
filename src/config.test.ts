@@ -46,8 +46,7 @@ describe(parseConfig, () => {
         approved: [],
         ignored: [],
         backfill: {
-          projectsRoot: '~/Projects',
-          localFolders: [],
+          folders: [],
           noGit: [],
           remote: {},
           branches: {},
@@ -75,6 +74,17 @@ describe(parseConfig, () => {
       'login: "not a login" is not a GitHub login',
       'emails: list at least one email',
     ])
+  })
+
+  it('says what replaced the folder settings of older configs', () => {
+    const issues = issuesOf({
+      login: 'ada',
+      emails: ['ada@work.example'],
+      backfill: { projectsRoot: '~/Projects', localFolders: ['acme'] },
+    })
+    expect(issues).toHaveLength(2)
+    expect(issues[0]).toMatch(/^backfill\.projectsRoot: replaced by backfill\.folders/u)
+    expect(issues[1]).toMatch(/^backfill\.localFolders: replaced by backfill\.folders/u)
   })
 
   it('rejects wrong types', () => {

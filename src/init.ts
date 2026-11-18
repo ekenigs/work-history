@@ -26,14 +26,15 @@ import type { Answers, Detected } from './init-config.ts'
 import {
   checkedConfig,
   detect,
-  listFolders,
   nextSteps,
   readExisting,
   serialize,
   splitList,
-  withFolders,
 } from './init-config.ts'
 import { expandHome, localRepos } from './local.ts'
+
+/** The folder offered for clones when the config names none and it exists. */
+const USUAL_CLONES = '~/Projects'
 
 /** `canonical` only takes `owner/name`; a clone with no GitHub remote has none. */
 const REPO = /^[\w.-]+\/[\w.-]+$/u
@@ -126,10 +127,9 @@ function validFolders(value: string | undefined): string | undefined {
   return missing === undefined ? undefined : `${missing} is not a folder`
 }
 
-/** The folders to offer: the config's, or the default root when it exists. */
+/** The folders to offer: the config's, or the usual one when it exists. */
 function knownFolders(backfill: BackfillConfig): string[] {
-  const folders = listFolders(backfill)
-  return folders.length === 0 && isFolder(backfill.projectsRoot) ? [backfill.projectsRoot] : folders
+  return backfill.folders.length === 0 && isFolder(USUAL_CLONES) ? [USUAL_CLONES] : backfill.folders
 }
 
 async function askFolders(backfill: BackfillConfig): Promise<BackfillConfig> {
@@ -141,12 +141,12 @@ async function askFolders(backfill: BackfillConfig): Promise<BackfillConfig> {
       validate: validFolders,
     }),
   )
-  return withFolders(backfill, splitList(answer))
+  return { ...backfill, folders: splitList(answer) }
 }
 
 /** The pairs of GitHub repos in the local clones that share the user's commits. */
 function detectCopies(backfill: BackfillConfig, emails: readonly string[]): CopyPair[] {
-  const repos = localRepos(backfill, expandHome(backfill.projectsRoot))
+  const repos = localRepos(backfill)
   if (repos.length === 0 || emails.length === 0) {
     return []
   }
