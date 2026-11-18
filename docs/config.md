@@ -93,7 +93,7 @@ The update run reports every repo you worked in that is on neither list as a new
 
 ## Backfill settings
 
-`backfill` holds the settings for `work-history backfill`, which reads your local clones as well as GitHub. The update run does not use them.
+`backfill` holds the settings for the backfill: the first `work-history sync`, or one with `--full`, which reads your local clones as well as GitHub. The update run does not use them.
 
 Clones add what GitHub cannot show for your login:
 

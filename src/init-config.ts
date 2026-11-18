@@ -94,16 +94,14 @@ export function serialize(config: ConfigFile): string {
 export function nextSteps(withSkill: boolean): string {
   const byHand = [
     'Without an agent, add repos to "approved" in the config, then run:',
-    '  work-history backfill --no-agent    once, to write your log',
-    '  work-history update --no-agent      whenever you want to catch up',
+    '  work-history sync --no-agent    to write your log, and again to catch up',
   ]
   if (!withSkill) {
     return byHand.join('\n')
   }
   return [
     'In your agent, as a slash command or in plain words:',
-    '  /work-history backfill    once, to write your log',
-    '  /work-history update      whenever you want to catch up',
+    '  /work-history    to write your log, and again to catch up',
     '',
     ...byHand,
   ].join('\n')

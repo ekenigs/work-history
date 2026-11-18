@@ -58,7 +58,7 @@
     "backfill": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Settings for `work-history backfill`, which also reads local git clones.",
+      "description": "Settings for the backfill (the first `sync`, or `sync --full`), which also reads local git clones.",
       "properties": {
         "folders": {
           "type": "array",

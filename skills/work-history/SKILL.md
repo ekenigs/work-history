@@ -13,15 +13,18 @@ The CLI needs the GitHub CLI, signed in (`gh auth status`). It only reads: it ne
 
 ## Which run
 
-The user can name the run as an argument to this skill: `/work-history backfill` or `/work-history update`. A request in plain words ("backfill my work history", "update my work history") means the same.
+The CLI has one command, `npx work-history sync`, and the output file decides what it reads. Choose the run the same way:
 
-With no run named, choose by the output file: backfill when it does not exist yet or has no `<!-- last-scanned: YYYY-MM-DD -->` cursor, update otherwise.
+- **Backfill** when the output file does not exist yet or has no `<!-- last-scanned: YYYY-MM-DD -->` cursor.
+- **Update** otherwise.
 
-When the named run does not fit the output file, say so and ask before you go on: a `backfill` for a file that already has a cursor would add to a log that is in use, and an `update` for a file with no cursor has no start date.
+The `run` record's `mode` (`backfill` or `update`) says which one the CLI ran. If it is not the one you chose, stop and tell the user.
+
+`sync --full` backfills again for a file that already has a cursor. Run it only when the user asks for a full re-read (`/work-history full`, "re-read all my history"), and say first that it adds to a log that is in use.
 
 ## First run: backfill
 
-1. **Collect.** `npx work-history backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
+1. **Collect.** `npx work-history sync --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.folders` is set, their local clones.
 2. **Sort repos.** Each `repo` record is a project candidate. Show the user the repos with their counts and date ranges, in batches of up to 4 with `AskUserQuestion` when you have it: **Approve** or **Ignore**. Add the answers to `approved` or `ignored` in the config, keeping each list sorted.
 3. **Write.** Create the output file: a `# Work history` heading, the cursor line set to the `run` record's `until`, then a project section for each approved repo, with entries from its `change` records by the rubric.
 
@@ -31,8 +34,8 @@ A run covers everything since the cursor in the output file. The cursor moves on
 
 1. **Gate.** If the output file sits in a git repo with a GitHub remote, `git fetch origin`. If `gh pr list --state open --json url,headRefName` lists a `work-history/` branch, stop and report "Merge or close <url> first." The CLI collects through yesterday (UTC), the last complete day. If the cursor is already that day or later, stop and report "Already scanned through <date>."
 2. **Branch.** In a git repo only: `git switch -c work-history/<YYYY-MM-DD of today> origin/<default branch>`.
-3. **Collect.** `npx work-history update --out "$TMPDIR/work-history.jsonl"`.
-4. **New projects.** For each `new-project` record, ask the user, with its evidence in the question: **Approve**, **Ignore** or **Ask next time**. Add answered repos to `approved` or `ignored` in the config, keeping the lists sorted. Collect each newly approved repo with `npx work-history update --repo <repo> --since 1970-01-01` and give it a new project section. A run with `--repo` reads only that repo and prints no `new-project` records.
+3. **Collect.** `npx work-history sync --out "$TMPDIR/work-history.jsonl"`.
+4. **New projects.** For each `new-project` record, ask the user, with its evidence in the question: **Approve**, **Ignore** or **Ask next time**. Add answered repos to `approved` or `ignored` in the config, keeping the lists sorted. Collect each newly approved repo with `npx work-history sync --repo <repo> --since 1970-01-01` and give it a new project section. A run with `--repo` reads only that repo and prints no `new-project` records.
 5. **Entries.** Apply the rubric to every `change` record. Done when each one is in a new entry, extends an existing entry, or is skipped under a named Skip rule.
 6. **Cursor.** Set the cursor to the `run` record's `until`.
 7. **Land.** Outside git, stop here and summarize the run. In git, commit the output file and the config as `Update work history through <until>`, push, and `gh pr create --title "Work history through <until>"`. Body: the window; each added or extended entry on one line; the repos the user sorted; the `run` record's warnings. A run with no qualifying work still gets the PR, with "No qualifying work" in the body.

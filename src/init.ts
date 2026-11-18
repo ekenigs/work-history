@@ -254,9 +254,7 @@ async function gather(
   yes: boolean,
 ): Promise<{ existing: Config | null; answers: Answers }> {
   if (!ghAuthenticated()) {
-    log.warn(
-      'gh is not installed or not signed in. `backfill` and `update` need it: run `gh auth login`.',
-    )
+    log.warn('gh is not installed or not signed in. `sync` needs it: run `gh auth login`.')
   }
   const existing = readExisting(file)
   if (existing !== null) {

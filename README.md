@@ -77,15 +77,13 @@ npx work-history init
 
 Then ask your agent:
 
-> Backfill my work history.
-
-and after that, whenever you want to catch up:
-
 > Update my work history.
 
-In an agent that runs skills as slash commands, such as Claude Code, `/work-history backfill` and `/work-history update` do the same.
+The first time, that backfills your whole history. After that, the same request catches up from where the log stops.
 
-No agent? Add the repos you want to `approved` in the config, then run `npx work-history backfill --no-agent` once and `npx work-history update --no-agent` after that.
+In an agent that runs skills as slash commands, such as Claude Code, `/work-history` does the same.
+
+No agent? Add the repos you want to `approved` in the config, then run `npx work-history sync --no-agent`, the first time and every time after.
 
 ## Commands
 
@@ -100,19 +98,19 @@ The folders you name are saved under `backfill` for the backfill to read. `init`
 | `--config <file>` | Config file to write. Default: `./work-history.config.json` |
 | `-y`, `--yes`     | Accept the detected values without prompts. Skips the scan. |
 
-### `work-history backfill`
+### `work-history sync`
 
-Reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
+Prints your changes as JSON Lines. Your log decides what a run reads:
 
-### `work-history update`
+- **No log, or no cursor in it: a backfill.** It reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
+- **A cursor (`<!-- last-scanned: YYYY-MM-DD -->`): an update.** It reads GitHub only, for the `approved` repos, from the cursor to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
 
-Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
-
-Both commands print JSON Lines and take these options.
+The run says on stderr which of the two it is. Use `--full` to backfill again when the log already has a cursor, for example after you add a clones folder or an old email to the config.
 
 | Option               | Description                                                                   |
 | -------------------- | ----------------------------------------------------------------------------- |
-| `--since YYYY-MM-DD` | Start of the window, exclusive. Default: 1970-01-01 (backfill) or the cursor. |
+| `--full`             | Read all your history again, even when the log has a cursor.                  |
+| `--since YYYY-MM-DD` | Start of the window, exclusive. Default: the cursor, or 1970-01-01 with none. |
 | `--until YYYY-MM-DD` | End of the window, inclusive, before today. Default: yesterday (UTC).         |
 | `--repo owner/name`  | Limit to one repo; repeat for more. Skips the `new-project` scan.             |
 | `--out <file>`       | Write the JSON Lines to a file instead of stdout. Not with `--no-agent`.      |
@@ -121,7 +119,9 @@ Both commands print JSON Lines and take these options.
 
 ### `--no-agent`
 
-`work-history backfill --no-agent` and `work-history update --no-agent` read the same changes with the same options, then write them into your log with no agent: one line per change under its project, newest first. Only `approved` repos get entries; copies go under their `canonical` repo. It moves the cursor, never back, and skips changes the log already links to, so running it twice adds nothing. It lists the repos with your work that are on neither list, for you to add to `approved` or `ignored`.
+`work-history sync --no-agent` reads the same changes with the same options, then writes them into your log with no agent: one line per change under its project, newest first. Only `approved` repos get entries; copies go under their `canonical` repo. It moves the cursor, never back, and skips changes the log already links to, so running it twice adds nothing. It lists the repos with your work that are on neither list, for you to add to `approved` or `ignored`.
+
+An update reads only from the cursor on. After you add a repo to `approved`, run `work-history sync --no-agent --full` once to bring in its earlier changes.
 
 Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad usage or an invalid config. A GitHub error such as a rate limit stops the run with no output, so a log never moves past changes the run could not read.
 
@@ -143,7 +143,7 @@ Your config and log hold personal data, such as your emails. Keep them in a priv
 
 ## Output records
 
-`backfill` and `update` print one JSON object per line. Types are exported from the package (`import type { CollectRecord } from 'work-history'`).
+`sync` prints one JSON object per line. Types are exported from the package (`import type { CollectRecord } from 'work-history'`).
 
 | `type`        | Fields                                                                                                                        |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |

@@ -4,7 +4,7 @@ Thanks for helping. Bug reports and pull requests are welcome at [GitHub Issues]
 
 ## Setup
 
-You need Node.js 24 or later, [pnpm](https://pnpm.io/), and the [GitHub CLI](https://cli.github.com/) to run `backfill` and `update` against real data.
+You need Node.js 24 or later, [pnpm](https://pnpm.io/), and the [GitHub CLI](https://cli.github.com/) to run `sync` against real data.
 
 ```bash
 pnpm install

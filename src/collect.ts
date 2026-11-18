@@ -11,48 +11,49 @@ import { update } from './update.ts'
 const DAY = /^\d{4}-\d{2}-\d{2}$/u
 
 export interface CollectArgs {
-  mode: Mode
+  /** Read all history even when the log has a cursor. */
+  full: boolean
   since?: string | undefined
   until?: string | undefined
   repos: readonly string[]
 }
 
-function cursorSince(loaded: LoadedConfig): string {
+/** The window of a run and how it reads it. */
+export interface Run extends CollectOptions {
+  mode: Mode
+}
+
+function readCursor(loaded: LoadedConfig): string | null {
   const file = outputPath(loaded)
-  const cursor = existsSync(file) ? parseCursor(readFileSync(file, 'utf8')) : null
-  if (cursor === null) {
-    throw new UsageError(
-      `no <!-- last-scanned: YYYY-MM-DD --> cursor in ${file}; pass --since or run backfill first`,
-    )
-  }
-  return cursor
+  return existsSync(file) ? parseCursor(readFileSync(file, 'utf8')) : null
 }
 
 /**
- * Fills in the window: backfill starts at 1970-01-01, update at the output
- * file's cursor. It ends at yesterday (UTC) at the latest: the cursor moves to
- * `until` and the next run starts after it, so a day still in progress would
- * lose whatever lands later that day.
+ * Picks the mode and fills in the window. A log with a cursor gets an update
+ * from that cursor; a log with none, or a run with `full`, gets a backfill
+ * from 1970-01-01. The window ends at yesterday (UTC) at the latest: the
+ * cursor moves to `until` and the next run starts after it, so a day still in
+ * progress would lose whatever lands later that day.
  */
-export function resolveOptions(loaded: LoadedConfig, args: CollectArgs): CollectOptions {
+export function resolveRun(loaded: LoadedConfig, args: CollectArgs): Run {
+  const cursor = args.full ? null : readCursor(loaded)
   const until = args.until ?? yesterday()
-  const since = args.since ?? (args.mode === 'backfill' ? '1970-01-01' : cursorSince(loaded))
+  const since = args.since ?? cursor ?? '1970-01-01'
   if (!DAY.test(since) || !DAY.test(until)) {
     throw new UsageError('--since and --until must be YYYY-MM-DD')
   }
   if (until >= today()) {
     throw new UsageError(`--until must be before today (${today()} UTC); that day is not over yet`)
   }
-  return { since, until, repos: args.repos }
+  return { mode: cursor === null ? 'backfill' : 'update', since, until, repos: args.repos }
 }
 
 /** Runs one collection and returns its records in output order. */
-export function collect(loaded: LoadedConfig, args: CollectArgs): CollectRecord[] {
-  const opts = resolveOptions(loaded, args)
+export function collect(loaded: LoadedConfig, run: Run): CollectRecord[] {
   const { config } = loaded
-  return args.mode === 'backfill'
-    ? backfill(config, opts, emailPattern(config.emails))
-    : update(config, opts)
+  return run.mode === 'backfill'
+    ? backfill(config, run, emailPattern(config.emails))
+    : update(config, run)
 }
 
 export function toJsonl(records: readonly CollectRecord[]): string {

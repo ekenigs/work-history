@@ -3,7 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import type { ParseArgsConfig } from 'node:util'
 import { parseArgs } from 'node:util'
 
-import { collect, toJsonl } from './collect.ts'
+import type { Run } from './collect.ts'
+import { collect, resolveRun, toJsonl } from './collect.ts'
 import type { LoadedConfig } from './config.ts'
 import { CONFIG_FILE, loadConfig, outputPath } from './config.ts'
 import { UsageError } from './errors.ts'
@@ -11,26 +12,24 @@ import { ghAuthenticated } from './exec.ts'
 import { init } from './init.ts'
 import type { RenderResult } from './render.ts'
 import { render } from './render.ts'
-import type { Mode } from './types.ts'
 
 const USAGE = `Usage:
   work-history init [--config <file>] [--yes]
-  work-history backfill [options]
-  work-history update [options]
+  work-history sync [options]
 
 Commands:
-  init       Create or update ${CONFIG_FILE} with a guided setup.
-  backfill   Read all your history: GitHub and your local clones.
-  update     Read the approved repos on GitHub, from the cursor in your log.
+  init   Create or update ${CONFIG_FILE} with a guided setup.
+  sync   Print your changes as JSONL for an agent to write up. The first run
+         reads all your history: GitHub and your local clones. Once your log
+         has a cursor, a run reads the approved repos on GitHub from there.
 
-Both print your changes as JSONL for an agent to write up. With --no-agent
-they write the log themselves.
-
-Backfill and update options:
+Sync options:
+  --full               Read all your history again, even when the log has a
+                       cursor.
   --no-agent           Write your changes into the log directly, one line each,
                        with no agent. Only approved repos get entries.
-  --since YYYY-MM-DD   Start of the window, exclusive. Default: 1970-01-01 for
-                       backfill; the cursor in the log for update.
+  --since YYYY-MM-DD   Start of the window, exclusive. Default: the cursor in the
+                       log, or 1970-01-01 with none or with --full.
   --until YYYY-MM-DD   End of the window, inclusive. Default: yesterday (UTC),
                        the last complete day.
   --repo owner/name    Limit to a repo; repeatable. Skips the new-project scan.
@@ -54,6 +53,7 @@ const PARSE_CONFIG = {
     until: { type: 'string' },
     repo: { type: 'string', multiple: true },
     out: { type: 'string' },
+    full: { type: 'boolean' },
     'no-agent': { type: 'boolean' },
     config: { type: 'string' },
     yes: { type: 'boolean', short: 'y' },
@@ -77,13 +77,22 @@ function loadFor(args: Args): LoadedConfig {
   return loaded
 }
 
-function collectArgs(mode: Mode, args: Args): Parameters<typeof collect>[1] {
-  return { mode, since: args.values.since, until: args.values.until, repos: args.values.repo ?? [] }
+/** Resolves the run and says on stderr which kind it is, since the log decides. */
+function runFor(loaded: LoadedConfig, args: Args): Run {
+  const run = resolveRun(loaded, {
+    full: args.values.full === true,
+    since: args.values.since,
+    until: args.values.until,
+    repos: args.values.repo ?? [],
+  })
+  const kind = run.mode === 'backfill' ? 'full sync' : 'sync from the cursor'
+  process.stderr.write(`work-history: ${kind}, ${run.since} to ${run.until}\n`)
+  return run
 }
 
-function runCollect(mode: Mode, args: Args): void {
+function runCollect(args: Args): void {
   const loaded = loadFor(args)
-  const text = toJsonl(collect(loaded, collectArgs(mode, args)))
+  const text = toJsonl(collect(loaded, runFor(loaded, args)))
   if (args.values.out === undefined) {
     process.stdout.write(text)
   } else {
@@ -108,12 +117,12 @@ function renderSummary(result: RenderResult, file: string): string {
   return `${lines.join('\n')}\n`
 }
 
-function runNoAgent(mode: Mode, args: Args): void {
+function runNoAgent(args: Args): void {
   if (args.values.out !== undefined) {
     throw new UsageError('--out does not go with --no-agent, which writes to the log in the config')
   }
   const loaded = loadFor(args)
-  const records = collect(loaded, collectArgs(mode, args))
+  const records = collect(loaded, runFor(loaded, args))
   const file = outputPath(loaded)
   const result = render(
     existsSync(file) ? readFileSync(file, 'utf8') : null,
@@ -133,11 +142,11 @@ async function main(argv: readonly string[]): Promise<void> {
     process.stdout.write(USAGE)
   } else if (command === 'init') {
     await init({ configPath: args.values.config ?? CONFIG_FILE, yes: args.values.yes === true })
-  } else if (command === 'backfill' || command === 'update') {
+  } else if (command === 'sync') {
     if (args.values['no-agent'] === true) {
-      runNoAgent(command, args)
+      runNoAgent(args)
     } else {
-      runCollect(command, args)
+      runCollect(args)
     }
   } else {
     throw new UsageError(`unknown command: ${command}`)
