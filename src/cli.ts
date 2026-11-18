@@ -85,8 +85,7 @@ function runFor(loaded: LoadedConfig, args: Args): Run {
     until: args.values.until,
     repos: args.values.repo ?? [],
   })
-  const kind = run.mode === 'backfill' ? 'full sync' : 'sync from the cursor'
-  process.stderr.write(`work-history: ${kind}, ${run.since} to ${run.until}\n`)
+  process.stderr.write(`work-history: ${run.mode}, ${run.since} to ${run.until}\n`)
   return run
 }
 
@@ -109,6 +108,8 @@ function renderSummary(result: RenderResult, file: string): string {
     lines.push(
       'Repos with your work on neither list; add each to approved or ignored in the config:',
       ...result.unsorted.map((repo) => `  ${repo}`),
+      'A run reads from the cursor on. After you approve a repo, bring in its earlier changes with:',
+      '  work-history sync --no-agent --full',
     )
   }
   if (result.warnings.length > 0) {
@@ -133,9 +134,20 @@ function runNoAgent(args: Args): void {
   process.stdout.write(renderSummary(result, file))
 }
 
+function runSync(args: Args): void {
+  if (args.values['no-agent'] === true) {
+    runNoAgent(args)
+  } else {
+    runCollect(args)
+  }
+}
+
 async function main(argv: readonly string[]): Promise<void> {
   const args = parseArgs({ ...PARSE_CONFIG, args: [...argv] })
-  const [command] = args.positionals
+  const [command, ...extra] = args.positionals
+  if (extra.length > 0) {
+    throw new UsageError(`unexpected argument: ${extra.join(' ')}`)
+  }
   if (args.values.version === true) {
     process.stdout.write(`${version()}\n`)
   } else if (args.values.help === true || command === undefined) {
@@ -143,11 +155,7 @@ async function main(argv: readonly string[]): Promise<void> {
   } else if (command === 'init') {
     await init({ configPath: args.values.config ?? CONFIG_FILE, yes: args.values.yes === true })
   } else if (command === 'sync') {
-    if (args.values['no-agent'] === true) {
-      runNoAgent(args)
-    } else {
-      runCollect(args)
-    }
+    runSync(args)
   } else {
     throw new UsageError(`unknown command: ${command}`)
   }

@@ -55,6 +55,18 @@ describe(resolveRun, () => {
     expect(run.repos).toStrictEqual(['acme/app'])
   })
 
+  it('stops for a log that has entries but lost its cursor', () => {
+    const lost = '# Work\n\n## app (acme/app)\n\n- **Add uploads** (2026-09).\n'
+    expect(() => resolveRun(loaded(lost), { full: false, repos: [] })).toThrow(/no valid/u)
+    expect(
+      resolveRun(loaded(`${lost}<!-- last-scanned: 2026-02-30 -->\n`), { full: true, repos: [] })
+        .mode,
+    ).toBe('backfill')
+    expect(resolveRun(loaded(lost), { full: false, since: '2026-01-01', repos: [] })).toMatchObject(
+      { mode: 'backfill', since: '2026-01-01' },
+    )
+  })
+
   it('backfills from the epoch with full, whatever the cursor', () => {
     const run = resolveRun(loaded(WITH_CURSOR), { full: true, repos: [] })
     expect(run.mode).toBe('backfill')

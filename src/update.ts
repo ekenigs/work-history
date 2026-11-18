@@ -93,6 +93,7 @@ function repoChanges({ cfg, opts, prs }: RunContext, repo: string): CollectRecor
 /**
  * GitHub-only run over the `approved` repos plus new-project candidates, or
  * over `opts.repos` alone: a run limited to some repos reads nothing else.
+ * `collect` adds the `run` record.
  */
 export function update(cfg: Config, opts: CollectOptions): CollectRecord[] {
   const limited = opts.repos.length > 0
@@ -101,6 +102,5 @@ export function update(cfg: Config, opts: CollectOptions): CollectRecord[] {
   return [
     ...(limited ? [] : newProjects({ cfg, opts, prs })),
     ...targets.toSorted().flatMap((repo) => repoChanges({ cfg, opts, prs }, repo)),
-    { type: 'run', mode: 'update', since: opts.since, until: opts.until, warnings: [] },
   ]
 }

@@ -9,7 +9,7 @@ The work-history file is the user's career log: every feature they shipped, grou
 
 `work-history.config.json` in the repo root (or the path the user gives) names the user's GitHub `login`, commit `emails`, the `output` file, and the `approved` and `ignored` repos. Read it first. If it is missing, ask the user to run `npx work-history init`.
 
-The CLI needs the GitHub CLI, signed in (`gh auth status`). It only reads: it never edits the config or the output file. You do.
+The CLI needs the GitHub CLI, signed in (`gh auth status`). Run as this skill says, it only reads: it never edits the config or the output file. You do. Do not pass `--no-agent`, which makes the CLI write the output file itself.
 
 ## Which run
 
@@ -20,7 +20,9 @@ The CLI has one command, `npx work-history sync`, and the output file decides wh
 
 The `run` record's `mode` (`backfill` or `update`) says which one the CLI ran. If it is not the one you chose, stop and tell the user.
 
-`sync --full` backfills again for a file that already has a cursor. Run it only when the user asks for a full re-read (`/work-history full`, "re-read all my history"), and say first that it adds to a log that is in use.
+`sync --full` backfills again for a file that already has a cursor. Run it only when the user asks for a full re-read (`/work-history full`, "re-read all my history"), say first that it adds to a log that is in use, and follow [Full re-read](#full-re-read), not the first-run steps.
+
+If the CLI stops because the output file has entries but no valid cursor, show the user the error and ask: put the cursor back, or do a full re-read.
 
 ## First run: backfill
 
@@ -39,6 +41,17 @@ A run covers everything since the cursor in the output file. The cursor moves on
 5. **Entries.** Apply the rubric to every `change` record. Done when each one is in a new entry, extends an existing entry, or is skipped under a named Skip rule.
 6. **Cursor.** Set the cursor to the `run` record's `until`.
 7. **Land.** Outside git, stop here and summarize the run. In git, commit the output file and the config as `Update work history through <until>`, push, and `gh pr create --title "Work history through <until>"`. Body: the window; each added or extended entry on one line; the repos the user sorted; the `run` record's warnings. A run with no qualifying work still gets the PR, with "No qualifying work" in the body.
+
+## Full re-read
+
+The output file stays: never create it again or drop what it holds.
+
+1. **Gate and branch** as in the update run, steps 1 and 2, but do not stop for a cursor that is already at yesterday.
+2. **Collect.** `npx work-history sync --full --out "$TMPDIR/work-history.jsonl"`. The `run` record's `mode` is `backfill`.
+3. **Sort repos.** Ask about each `repo` record that is on neither list, as in the first run. Leave the lists' other repos as they are.
+4. **Entries.** For each approved repo, apply the rubric to the `change` records the file does not link to yet: a new entry, an extended entry, or a skip under a named Skip rule. Add a project section for a repo that has none.
+5. **Cursor.** Set it to the `run` record's `until`, never back.
+6. **Land** as in the update run, step 7.
 
 ## Records
 

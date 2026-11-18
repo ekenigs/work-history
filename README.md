@@ -105,7 +105,7 @@ Prints your changes as JSON Lines. Your log decides what a run reads:
 - **No log, or no cursor in it: a backfill.** It reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
 - **A cursor (`<!-- last-scanned: YYYY-MM-DD -->`): an update.** It reads GitHub only, for the `approved` repos, from the cursor to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
 
-The run says on stderr which of the two it is. Use `--full` to backfill again when the log already has a cursor, for example after you add a clones folder or an old email to the config.
+The run says on stderr which of the two it is, `backfill` or `update`. A log that has project sections but no valid cursor stops the run with a usage error, so a lost cursor never turns into a backfill of a log in use: put the cursor back, or pass `--since` or `--full`. Use `--full` to backfill again when the log already has a cursor, for example after you add a clones folder or an old email to the config.
 
 | Option               | Description                                                                   |
 | -------------------- | ----------------------------------------------------------------------------- |

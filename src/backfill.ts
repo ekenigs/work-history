@@ -81,8 +81,10 @@ class Backfill {
         this.metaFor(change.repo)
       }
     }
-    // Own repos without PRs still count for direct pushes.
-    for (const repo of reachableRepos().filter((name) => this.wants(name))) {
+    // Own repos without PRs still count for direct pushes. A run limited to
+    // some repos names them itself, so it skips the listing of the account.
+    const own = this.opts.repos.length > 0 ? this.opts.repos : reachableRepos()
+    for (const repo of own) {
       this.metaFor(repo)
     }
   }
@@ -140,7 +142,7 @@ function repoRecords(
   return records
 }
 
-/** Every repo the user touched, from local clones and GitHub. */
+/** Every repo the user touched, from local clones and GitHub. `collect` adds the `run` record. */
 export function backfill(cfg: Config, opts: CollectOptions, pattern: string): CollectRecord[] {
   const run = new Backfill(cfg, opts)
   run.readLocal(pattern)
@@ -149,6 +151,5 @@ export function backfill(cfg: Config, opts: CollectOptions, pattern: string): Co
   return [
     ...repoRecords(cfg, run.meta, run.changes),
     ...cfg.backfill.noGit.map((folder) => noGitRecord(folder)),
-    { type: 'run', mode: 'backfill', since: opts.since, until: opts.until, warnings: [] },
   ]
 }
