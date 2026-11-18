@@ -42,9 +42,9 @@ describe(resolveOptions, () => {
     ).toStrictEqual({ since: '1970-01-01', until: '2026-01-31', repos: [] })
   })
 
-  it('starts monthly at the cursor in the output file', () => {
+  it('starts update at the cursor in the output file', () => {
     const options = resolveOptions(loaded('# Work\n<!-- last-scanned: 2026-10-31 -->\n'), {
-      mode: 'monthly',
+      mode: 'update',
       repos: ['acme/app'],
     })
     expect(options.since).toBe('2026-10-31')
@@ -52,10 +52,10 @@ describe(resolveOptions, () => {
     expect(options.repos).toStrictEqual(['acme/app'])
   })
 
-  it('needs a cursor or --since for monthly', () => {
-    expect(() => resolveOptions(loaded(null), { mode: 'monthly', repos: [] })).toThrow(UsageError)
+  it('needs a cursor or --since for update', () => {
+    expect(() => resolveOptions(loaded(null), { mode: 'update', repos: [] })).toThrow(UsageError)
     expect(
-      resolveOptions(loaded(null), { mode: 'monthly', since: '2026-01-01', repos: [] }).since,
+      resolveOptions(loaded(null), { mode: 'update', since: '2026-01-01', repos: [] }).since,
     ).toBe('2026-01-01')
   })
 

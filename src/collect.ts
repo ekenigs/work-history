@@ -5,8 +5,8 @@ import type { LoadedConfig } from './config.ts'
 import { emailPattern, outputPath } from './config.ts'
 import { UsageError } from './errors.ts'
 import { parseCursor, today, yesterday } from './helpers.ts'
-import { monthly } from './monthly.ts'
 import type { CollectOptions, CollectRecord, Mode } from './types.ts'
+import { update } from './update.ts'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u
 
@@ -29,7 +29,7 @@ function cursorSince(loaded: LoadedConfig): string {
 }
 
 /**
- * Fills in the window: backfill starts at 1970-01-01, monthly at the output
+ * Fills in the window: backfill starts at 1970-01-01, update at the output
  * file's cursor. It ends at yesterday (UTC) at the latest: the cursor moves to
  * `until` and the next run starts after it, so a day still in progress would
  * lose whatever lands later that day.
@@ -52,7 +52,7 @@ export function collect(loaded: LoadedConfig, args: CollectArgs): CollectRecord[
   const { config } = loaded
   return args.mode === 'backfill'
     ? backfill(config, opts, emailPattern(config.emails))
-    : monthly(config, opts)
+    : update(config, opts)
 }
 
 export function toJsonl(records: readonly CollectRecord[]): string {

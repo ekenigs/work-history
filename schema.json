@@ -48,12 +48,12 @@
     "approved": {
       "$ref": "#/$defs/repoList",
       "default": [],
-      "description": "Repos the monthly run reads. The agent adds repos here when you approve a new project."
+      "description": "Repos the update run reads. The agent adds repos here when you approve a new project."
     },
     "ignored": {
       "$ref": "#/$defs/repoList",
       "default": [],
-      "description": "Repos the monthly run never reports as new projects."
+      "description": "Repos the update run never reports as new projects."
     },
     "backfill": {
       "type": "object",

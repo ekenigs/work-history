@@ -22,7 +22,7 @@ The Acme web app and its API. 2025-03 → 2026-10.
 1. The `work-history` CLI reads GitHub through the [GitHub CLI](https://cli.github.com/) and prints your changes as JSON Lines: one record per merged PR or direct commit, deduplicated across branches and copies. `collect` only reads; it never writes your log.
 2. The `work-history` [agent skill](skills/work-history/SKILL.md) runs the CLI, asks you which new repos count, writes the entries with a fixed rubric (one entry per feature, facts from PR text only), moves the cursor, and opens a pull request with the update.
 
-Run it once to backfill your history, then once a month. A missed month catches up on the next run, because the cursor in the file only moves when an update lands.
+Run it once to backfill your history, then as often as you like: every week, every month, whenever you remember. A late run catches up by itself, because the cursor in the file only moves when an update lands.
 
 ### Why a coding agent
 
@@ -79,13 +79,13 @@ Then ask your agent:
 
 > Backfill my work history.
 
-and once a month:
+and after that, whenever you want to catch up:
 
-> Run the monthly work-history update.
+> Update my work history.
 
-In an agent that runs skills as slash commands, such as Claude Code, `/work-history backfill` and `/work-history monthly` do the same.
+In an agent that runs skills as slash commands, such as Claude Code, `/work-history backfill` and `/work-history update` do the same.
 
-No agent? Add the repos you want to `approved` in the config, then run `npx work-history render backfill` once and `npx work-history render monthly` after that.
+No agent? Add the repos you want to `approved` in the config, then run `npx work-history render backfill` once and `npx work-history render update` after that.
 
 ## Commands
 
@@ -104,7 +104,7 @@ The folders you name are saved under `backfill` for the backfill to read. `init`
 
 Reads all your history: merged PRs across GitHub, direct commits on your repos' default branches, and commits in the local clones listed under `backfill`.
 
-### `work-history collect monthly`
+### `work-history collect update`
 
 Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
 
@@ -118,7 +118,7 @@ These options apply to both `collect` and `render`.
 | `--out <file>`       | `collect` only: write the JSON Lines to a file instead of stdout.             |
 | `--config <file>`    | Config file. Default: `./work-history.config.json`                            |
 
-### `work-history render backfill` and `work-history render monthly`
+### `work-history render backfill` and `work-history render update`
 
 Collects like `collect` with the same options, then writes the records into your log with no agent: one line per change under its project, newest first. Only `approved` repos get entries; copies go under their `canonical` repo. It moves the cursor, never back, and skips changes the log already links to, so running it twice adds nothing. It lists the repos with your work that are on neither list, for you to add to `approved` or `ignored`.
 
@@ -134,8 +134,8 @@ Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad 
 | `emails`    | Every email you commit with, including your `…@users.noreply.github.com` address.                                                                               |
 | `output`    | The log file, relative to the config. Default: `work-history.md`.                                                                                               |
 | `canonical` | Repos that carry copies of another repo's commits (a mirror or a split-out package), mapped to the source. That work counts once.                               |
-| `approved`  | Repos the monthly run reads. The skill adds repos when you approve them.                                                                                        |
-| `ignored`   | Repos the monthly run never suggests.                                                                                                                           |
+| `approved`  | Repos the update run reads. The skill adds repos when you approve them.                                                                                         |
+| `ignored`   | Repos the update run never suggests.                                                                                                                            |
 | `backfill`  | Local clones for the backfill: `folders` to scan and `noGit` folders, as paths such as `~/Projects`, and `remote`, `branches` and `aliases` for unusual clones. |
 
 Your config and log hold personal data, such as your emails. Keep them in a private repo.

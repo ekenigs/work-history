@@ -15,8 +15,8 @@ import type { Mode } from './types.ts'
 
 const USAGE = `Usage:
   work-history init [--config <file>] [--yes]
-  work-history collect <backfill|monthly> [options]
-  work-history render <backfill|monthly> [options]
+  work-history collect <backfill|update> [options]
+  work-history render <backfill|update> [options]
 
 Commands:
   init      Create or update ${CONFIG_FILE} with a guided setup.
@@ -26,7 +26,7 @@ Commands:
 
 Collect and render options:
   --since YYYY-MM-DD   Start of the window, exclusive. Default: 1970-01-01 for
-                       backfill; the cursor in the output file for monthly.
+                       backfill; the cursor in the output file for update.
   --until YYYY-MM-DD   End of the window, inclusive. Default: yesterday (UTC),
                        the last complete day.
   --repo owner/name    Limit to a repo; repeatable. Skips the new-project scan.
@@ -65,8 +65,8 @@ function version(): string {
 
 function collectFor(command: string, args: Args): { loaded: LoadedConfig; mode: Mode } {
   const [, mode] = args.positionals
-  if (mode !== 'backfill' && mode !== 'monthly') {
-    throw new UsageError(`${command} needs a mode: backfill or monthly`)
+  if (mode !== 'backfill' && mode !== 'update') {
+    throw new UsageError(`${command} needs a mode: backfill or update`)
   }
   const loaded = loadConfig(args.values.config ?? CONFIG_FILE)
   if (!ghAuthenticated()) {

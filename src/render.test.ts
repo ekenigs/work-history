@@ -41,7 +41,7 @@ function pr(ref: string, title: string, date: string): Change {
 function records(...items: CollectRecord[]): CollectRecord[] {
   return [
     ...items,
-    { type: 'run', mode: 'monthly', since: '2026-09-30', until: '2026-10-31', warnings: [] },
+    { type: 'run', mode: 'update', since: '2026-09-30', until: '2026-10-31', warnings: [] },
   ]
 }
 

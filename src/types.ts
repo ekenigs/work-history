@@ -1,7 +1,7 @@
 /** Whether the user wrote a change or appears only in a `Co-authored-by` trailer. */
 export type Role = 'author' | 'co-author'
 
-export type Mode = 'backfill' | 'monthly'
+export type Mode = 'backfill' | 'update'
 
 export interface ChangeSize {
   additions: number

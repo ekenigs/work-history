@@ -29,7 +29,7 @@ The lint config in `vite.config.ts` turns on every Oxlint category. A rule is of
 - `src/cli.ts` parses arguments and runs a command.
 - `src/init.ts` is the interactive setup; `src/init-config.ts` holds its pure parts.
 - `src/config.ts` reads and checks `work-history.config.json`; keep `schema.json` and `config.example.json` in step with it (a test checks the keys).
-- `src/collect.ts` runs a collection; `src/backfill.ts` and `src/monthly.ts` are the two modes.
+- `src/collect.ts` runs a collection; `src/backfill.ts` and `src/update.ts` are the two modes.
 - `src/github.ts` and `src/local.ts` read GitHub (through `gh`) and local clones; `src/dedupe.ts` merges duplicates.
 - `skills/work-history/SKILL.md` is the agent skill that turns the records into the log.
 

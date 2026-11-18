@@ -62,7 +62,7 @@ export function splitList(text: string): string[] {
   return unique(text.split(/[,\n]/u))
 }
 
-/** Answers win; the lists the monthly runs maintain are kept. */
+/** Answers win; the lists the update runs maintain are kept. */
 export function buildConfig(existing: Config | null, answers: Answers): ConfigFile {
   return {
     $schema: SCHEMA_URL,
@@ -95,7 +95,7 @@ export function nextSteps(withSkill: boolean): string {
   const byHand = [
     'Without an agent, add repos to "approved" in the config, then run:',
     '  work-history render backfill    once, to write your log',
-    '  work-history render monthly     every month after that',
+    '  work-history render update      whenever you want to catch up',
   ]
   if (!withSkill) {
     return byHand.join('\n')
@@ -103,7 +103,7 @@ export function nextSteps(withSkill: boolean): string {
   return [
     'In your agent, as a slash command or in plain words:',
     '  /work-history backfill    once, to write your log',
-    '  /work-history monthly     every month after that',
+    '  /work-history update      whenever you want to catch up',
     '',
     ...byHand,
   ].join('\n')
