@@ -126,7 +126,7 @@ Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad 
 
 ## Configuration
 
-`work-history.config.json` is checked on every run, and [`schema.json`](schema.json) gives your editor completion and checks. See [`config.example.json`](config.example.json) for every field.
+`work-history.config.json` is checked on every run, and [`schema.json`](schema.json) gives your editor completion and checks. [docs/config.md](docs/config.md) explains every property: what it does, what fills it in, and when to edit it by hand. See [`config.example.json`](config.example.json) for a filled-in example.
 
 | Field       | Description                                                                                                                                                     |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |

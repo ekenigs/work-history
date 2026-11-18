@@ -16,6 +16,6 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 - `pnpm check` formats, lints and type-checks; `pnpm test` runs Vitest; `pnpm build` bundles with `vp pack`. Run all three before you finish.
 - Lint rules are off only with a comment in `vite.config.ts` that says why. Fix the code rather than disabling a rule.
-- When the config shape changes, update `src/config.ts`, `schema.json`, `config.example.json` and the README table together.
+- When the config shape changes, update `src/config.ts`, `schema.json`, `config.example.json`, the README table and `docs/config.md` together.
 - When the record format or the rubric changes, update `skills/work-history/SKILL.md`.
 - Test data uses made-up people and repos. Never commit a real `work-history.config.json` or `work-history.md`; `.gitignore` excludes them.
