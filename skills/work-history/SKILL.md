@@ -11,9 +11,15 @@ The work-history file is the user's career log: every feature they shipped, grou
 
 The CLI needs the GitHub CLI, signed in (`gh auth status`). It only reads: it never edits the config or the output file. You do.
 
-## First run: backfill
+## Which run
 
-Use this when the output file does not exist yet or has no `<!-- last-scanned: YYYY-MM-DD -->` cursor.
+The user can name the run as an argument to this skill: `/work-history backfill` or `/work-history monthly`. A request in plain words ("backfill my work history", "run the monthly update") means the same.
+
+With no run named, choose by the output file: backfill when it does not exist yet or has no `<!-- last-scanned: YYYY-MM-DD -->` cursor, monthly otherwise.
+
+When the named run does not fit the output file, say so and ask before you go on: a `backfill` for a file that already has a cursor would add to a log that is in use, and a `monthly` for a file with no cursor has no start date.
+
+## First run: backfill
 
 1. **Collect.** `npx work-history collect backfill --out "$TMPDIR/work-history.jsonl"`. This reads the user's merged PRs and commits across GitHub and, when `backfill.localFolders` is set, their local clones.
 2. **Sort repos.** Each `repo` record is a project candidate. Show the user the repos with their counts and date ranges, in batches of up to 4 with `AskUserQuestion` when you have it: **Approve** or **Ignore**. Add the answers to `approved` or `ignored` in the config, keeping each list sorted.

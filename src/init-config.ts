@@ -131,3 +131,22 @@ export function checkedConfig(file: string, existing: Config | null, answers: An
 export function serialize(config: ConfigFile): string {
   return `${JSON.stringify(config, null, 2)}\n`
 }
+
+/** How to get a log from here; `collect` alone only prints records. */
+export function nextSteps(withSkill: boolean): string {
+  const byHand = [
+    'Without an agent, add repos to "approved" in the config, then run:',
+    '  work-history render backfill    once, to write your log',
+    '  work-history render monthly     every month after that',
+  ]
+  if (!withSkill) {
+    return byHand.join('\n')
+  }
+  return [
+    'In your agent, as a slash command or in plain words:',
+    '  /work-history backfill    once, to write your log',
+    '  /work-history monthly     every month after that',
+    '',
+    ...byHand,
+  ].join('\n')
+}

@@ -7,6 +7,7 @@ import {
   buildConfig,
   checkedConfig,
   listFolders,
+  nextSteps,
   serialize,
   splitList,
   withFolders,
@@ -110,5 +111,17 @@ describe(checkedConfig, () => {
     expect(() =>
       checkedConfig('config.json', null, { ...answers, emails: ['ada@@work.example'] }),
     ).toThrow(/emails/u)
+  })
+})
+
+describe(nextSteps, () => {
+  it('names the slash commands only when the skill is installed', () => {
+    expect(nextSteps(true)).toContain('/work-history backfill')
+    expect(nextSteps(false)).not.toContain('/work-history')
+  })
+
+  it('always shows how to write the log with no agent', () => {
+    expect(nextSteps(true)).toContain('work-history render backfill')
+    expect(nextSteps(false)).toContain('work-history render backfill')
   })
 })

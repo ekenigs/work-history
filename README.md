@@ -83,6 +83,8 @@ and once a month:
 
 > Run the monthly work-history update.
 
+In an agent that runs skills as slash commands, such as Claude Code, `/work-history backfill` and `/work-history monthly` do the same.
+
 No agent? Add the repos you want to `approved` in the config, then run `npx work-history render backfill` once and `npx work-history render monthly` after that.
 
 ## Commands

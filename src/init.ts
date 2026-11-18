@@ -27,6 +27,7 @@ import {
   checkedConfig,
   detect,
   listFolders,
+  nextSteps,
   readExisting,
   serialize,
   splitList,
@@ -265,13 +266,7 @@ async function setup(options: InitOptions): Promise<void> {
   for (const written of skillFiles) {
     log.success(`Wrote ${shown(written)}`)
   }
-  note(
-    [
-      'All history, once:  work-history collect backfill --out backfill.jsonl',
-      'Every month:        ask your agent to run the work-history skill',
-    ].join('\n'),
-    'Next steps',
-  )
+  note(nextSteps(withSkill), 'Next steps')
 }
 
 /** Guided setup of the config file and, optionally, the agent skill. */
