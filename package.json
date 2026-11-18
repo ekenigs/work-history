@@ -1,0 +1,64 @@
+{
+  "name": "work-history",
+  "version": "0.1.0",
+  "description": "Keep a dated log of everything you shipped, collected from your GitHub PRs and commits and written up by your coding agent.",
+  "keywords": [
+    "agent-skill",
+    "career",
+    "changelog",
+    "cli",
+    "github",
+    "resume",
+    "work-history"
+  ],
+  "homepage": "https://github.com/ekenigs/work-history#readme",
+  "bugs": {
+    "url": "https://github.com/ekenigs/work-history/issues"
+  },
+  "license": "MIT",
+  "author": "Elmar Kenigs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ekenigs/work-history.git"
+  },
+  "bin": {
+    "work-history": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "schema.json",
+    "config.example.json"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./schema.json": "./schema.json",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "fix": "vp check --fix",
+    "prepublishOnly": "pnpm run check && pnpm run test && pnpm run build",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "vite-plus": "^1.7.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.21.0"
+}

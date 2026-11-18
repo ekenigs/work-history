@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ekenigs/work-history/main/schema.json",
+  "title": "work-history config",
+  "description": "Configuration for the work-history CLI (work-history.config.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["login", "emails"],
+  "$defs": {
+    "repo": {
+      "type": "string",
+      "pattern": "^[\\w.-]+/[\\w.*-]+$",
+      "description": "A GitHub repo as owner/name."
+    },
+    "repoList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/repo" },
+      "uniqueItems": true
+    }
+  },
+  "properties": {
+    "$schema": { "type": "string" },
+    "login": {
+      "type": "string",
+      "pattern": "^[A-Za-z\\d][A-Za-z\\d-]{0,38}$",
+      "description": "Your GitHub login."
+    },
+    "emails": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[^\\s@]+@[^\\s@]+$" },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Every email you commit with, including your GitHub noreply address."
+    },
+    "output": {
+      "type": "string",
+      "minLength": 1,
+      "default": "work-history.md",
+      "description": "The work-history Markdown file, relative to this config file."
+    },
+    "canonical": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/repo" },
+      "additionalProperties": { "$ref": "#/$defs/repo" },
+      "default": {},
+      "description": "Repos whose commits are copies of another repo's (a mirror or split), mapped to that repo. Their work is written up once, under the canonical repo."
+    },
+    "approved": {
+      "$ref": "#/$defs/repoList",
+      "default": [],
+      "description": "Repos the monthly run reads. The agent adds repos here when you approve a new project."
+    },
+    "ignored": {
+      "$ref": "#/$defs/repoList",
+      "default": [],
+      "description": "Repos the monthly run never reports as new projects."
+    },
+    "backfill": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Settings for `collect backfill`, which also reads local git clones.",
+      "properties": {
+        "projectsRoot": {
+          "type": "string",
+          "default": "~/Projects",
+          "description": "Folder that holds your local clones; ~ expands to your home folder."
+        },
+        "localFolders": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Folders under projectsRoot to scan for git repos, up to three levels deep."
+        },
+        "noGit": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Folders without git, reported with file dates only."
+        },
+        "remote": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/repo" },
+          "default": {},
+          "description": "owner/name for clones whose origin remote is missing or wrong, keyed by path under projectsRoot."
+        },
+        "branches": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } },
+          "default": {},
+          "description": "Branches to read instead of the default branch, keyed by clone path or owner/name."
+        },
+        "aliases": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/repo" },
+          "additionalProperties": { "$ref": "#/$defs/repo" },
+          "default": {},
+          "description": "Renamed owners or repos: old/name or old/* to new/name or new/*."
+        }
+      }
+    }
+  }
+}

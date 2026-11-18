@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+# Personal config and output
+work-history.config.json
+work-history.md

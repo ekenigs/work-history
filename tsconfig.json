@@ -1,0 +1,47 @@
+{
+  // The strictest settings for a Node ESM package.
+  "compilerOptions": {
+    // Language & environment
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "types": ["node"],
+
+    // Modules
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "isolatedDeclarations": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "noEmit": true,
+    "declaration": true,
+
+    // Type checking: core strictness
+    "strict": true,
+
+    // Type checking: additional strictness
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedSideEffectImports": true,
+
+    // Type checking: code quality
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
+    // Interop constraints
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Completeness
+    "skipLibCheck": true
+  },
+  "include": ["src", "vite.config.ts"]
+}
