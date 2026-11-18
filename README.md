@@ -58,8 +58,12 @@ It skips obvious noise (dependency bumps, merge, WIP and lint commits), writes o
 >
 > ```bash
 > git clone https://github.com/ekenigs/work-history.git
-> cd work-history && pnpm install && pnpm build && pnpm link --global
+> cd work-history && pnpm install && pnpm build && pnpm add -g "link:$PWD"
 > ```
+>
+> If pnpm says the global bin directory is not in `PATH`, run `pnpm setup`, open a new shell and try again.
+>
+> The global install links to your clone, so `pnpm build` picks up changes without reinstalling. Remove it with `pnpm remove -g work-history`.
 >
 > Then use `work-history` wherever this README says `npx work-history`.
 
