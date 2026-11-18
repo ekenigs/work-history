@@ -7,11 +7,14 @@ import { collect, toJsonl } from './collect.ts'
 import { CONFIG_FILE, loadConfig } from './config.ts'
 import { UsageError } from './errors.ts'
 import { ghAuthenticated } from './exec.ts'
+import { init } from './init.ts'
 
 const USAGE = `Usage:
+  work-history init [--config <file>] [--yes]
   work-history collect <backfill|monthly> [options]
 
 Commands:
+  init      Create or update ${CONFIG_FILE} with a guided setup.
   collect   Print your changes as JSONL for an agent to write up.
 
 Collect options:
@@ -23,6 +26,7 @@ Collect options:
 
 Common options:
   --config <file>      Config file. Default: ./${CONFIG_FILE}
+  -y, --yes            init only: accept detected values without prompts.
   -h, --help           Show this help.
   -v, --version        Show the version.
 `
@@ -38,6 +42,7 @@ const PARSE_CONFIG = {
     repo: { type: 'string', multiple: true },
     out: { type: 'string' },
     config: { type: 'string' },
+    yes: { type: 'boolean', short: 'y' },
     help: { type: 'boolean', short: 'h' },
     version: { type: 'boolean', short: 'v' },
   },
@@ -74,13 +79,15 @@ function runCollect(args: Args): void {
   }
 }
 
-function main(argv: readonly string[]): void {
+async function main(argv: readonly string[]): Promise<void> {
   const args = parseArgs({ ...PARSE_CONFIG, args: [...argv] })
   const [command] = args.positionals
   if (args.values.version === true) {
     process.stdout.write(`${version()}\n`)
   } else if (args.values.help === true || command === undefined) {
     process.stdout.write(USAGE)
+  } else if (command === 'init') {
+    await init({ configPath: args.values.config ?? CONFIG_FILE, yes: args.values.yes === true })
   } else if (command === 'collect') {
     runCollect(args)
   } else {
@@ -110,7 +117,7 @@ function report(error: unknown): void {
 }
 
 try {
-  main(process.argv.slice(2))
+  await main(process.argv.slice(2))
 } catch (error) {
   report(error)
 }
