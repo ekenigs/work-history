@@ -61,7 +61,7 @@ It skips obvious noise (dependency bumps, merge, WIP and lint commits), writes o
 > cd work-history && pnpm install && pnpm build && pnpm add -g "link:$PWD"
 > ```
 >
-> If pnpm says the global bin directory is not in `PATH`, run `pnpm setup`, open a new shell and try again.
+> If pnpm says the global bin directory is not in `PATH`, run `pnpm setup`, open a new shell and try again. If `pnpm setup` says your shell config already has a pnpm section, it was written by an older pnpm that put a different directory on `PATH`. Run `pnpm setup --force` to replace it.
 >
 > The global install links to your clone, so `pnpm build` picks up changes without reinstalling. Remove it with `pnpm remove -g work-history`.
 >
