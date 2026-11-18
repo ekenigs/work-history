@@ -75,17 +75,17 @@ Reads all your history: merged PRs across GitHub, direct commits on your repos' 
 
 ### `work-history collect monthly`
 
-Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to today. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
+Reads GitHub only, for the `approved` repos, from the cursor in your log (`<!-- last-scanned: YYYY-MM-DD -->`) to yesterday (UTC), the last complete day. Repos you worked in that are on neither list come out as `new-project` records for you to sort.
 
 | Option               | Description                                                                   |
 | -------------------- | ----------------------------------------------------------------------------- |
 | `--since YYYY-MM-DD` | Start of the window, exclusive. Default: 1970-01-01 (backfill) or the cursor. |
-| `--until YYYY-MM-DD` | End of the window, inclusive. Default: today.                                 |
-| `--repo owner/name`  | Limit to one repo; repeat for more.                                           |
+| `--until YYYY-MM-DD` | End of the window, inclusive, before today. Default: yesterday (UTC).         |
+| `--repo owner/name`  | Limit to one repo; repeat for more. Skips the `new-project` scan.             |
 | `--out <file>`       | Write the JSON Lines to a file instead of stdout.                             |
 | `--config <file>`    | Config file. Default: `./work-history.config.json`                            |
 
-Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad usage or an invalid config.
+Exit codes: `0` on success, `1` on a failure such as a GitHub error, `2` on bad usage or an invalid config. A GitHub error such as a rate limit stops the run with no output, so a log never moves past changes the run could not read.
 
 ## Configuration
 

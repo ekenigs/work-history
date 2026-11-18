@@ -72,6 +72,15 @@ export default defineConfig({
         },
       },
       {
+        files: ['src/exec.ts'],
+        rules: {
+          // The gh helpers take the result type from the caller: the gh query
+          // (its --jq filter or GraphQL selection) fixes the shape of the JSON.
+          'typescript/no-unnecessary-type-parameters': 'off',
+          'typescript/no-unsafe-type-assertion': 'off',
+        },
+      },
+      {
         files: ['src/errors.ts'],
         rules: {
           // The error hierarchy lives in one file.

@@ -1,9 +1,32 @@
-import { ghJson, ghLines, graphql } from './exec.ts'
-import { cleanBody, extractPrNumber, inWindow, stripPrSuffix } from './helpers.ts'
-import type { Change } from './types.ts'
+import {
+  CONFLICT,
+  FORBIDDEN,
+  ghJson,
+  ghLines,
+  ghPick,
+  graphql,
+  isTimeout,
+  NOT_FOUND,
+  UNPROCESSABLE,
+} from './exec.ts'
+import {
+  addDays,
+  cleanBody,
+  extractPrNumber,
+  inWindow,
+  repoKey,
+  splitWindow,
+  stripPrSuffix,
+} from './helpers.ts'
+import type { Change, CollectOptions } from './types.ts'
 
-/** GitHub's search API stops at 1000 results. */
+/** GitHub's search API stops at 1000 results: 10 pages of 100. */
 const SEARCH_LIMIT = 1000
+const SEARCH_PAGES = 10
+/** A branch that is gone or out of reach (403, 404) or a repo with no commits (409). */
+const NO_COMMITS: readonly number[] = [FORBIDDEN, NOT_FOUND, CONFLICT]
+/** GitHub answers 422 for a SHA a repo does not have. */
+const NO_SUCH_COMMIT: readonly number[] = [NOT_FOUND, UNPROCESSABLE]
 
 export interface GhRepoInfo {
   full_name: string
@@ -17,13 +40,21 @@ const repoInfoCache = new Map<string, GhRepoInfo | null>()
 
 /** `repos/<repo>`, cached; null when the repo is gone or out of reach. */
 export function repoInfo(repo: string): GhRepoInfo | null {
-  const cached = repoInfoCache.get(repo)
+  const cached = repoInfoCache.get(repoKey(repo))
   if (cached !== undefined) {
     return cached
   }
   const info = ghJson<GhRepoInfo>(`repos/${repo}`)
-  repoInfoCache.set(repo, info)
+  repoInfoCache.set(repoKey(repo), info)
   return info
+}
+
+/**
+ * The config's spelling of a repo plus GitHub's current one, as keys. They
+ * differ in case, or in name once a repo is renamed and GitHub redirects.
+ */
+export function repoKeys(repo: string): string[] {
+  return [repoKey(repo), repoKey(repoInfo(repo)?.full_name ?? repo)]
 }
 
 interface PrNode {
@@ -71,13 +102,31 @@ function prToChange(node: PrNode): Change {
   }
 }
 
-/** One page of the merged-PR search; `after` is the cursor of the next page or null. */
-function prPage(query: string, cursor: string | null): { nodes: PrNode[]; after: string | null } {
-  const vars: Record<string, string> =
-    cursor === null ? { searchQuery: query } : { searchQuery: query, after: cursor }
-  const { search } = graphql<PrSearch>(PR_QUERY, vars)
-  if (search.issueCount > SEARCH_LIMIT) {
-    throw new Error(`PR search returned ${String(search.issueCount)} results; split the window`)
+interface PrPage {
+  nodes: PrNode[]
+  /** The cursor of the next page, or null on the last one. */
+  after: string | null
+}
+
+/** The search result; null when GitHub times out on it, which a smaller date range avoids. */
+function prSearchPage(vars: Readonly<Record<string, string>>): PrSearch['search'] | null {
+  try {
+    return graphql<PrSearch>(PR_QUERY, vars).search
+  } catch (error) {
+    if (isTimeout(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
+/** One page of the merged-PR search; null when the search holds more than GitHub returns. */
+function prPage(query: string, cursor: string | null): PrPage | null {
+  const search = prSearchPage(
+    cursor === null ? { searchQuery: query } : { searchQuery: query, after: cursor },
+  )
+  if (search === null || search.issueCount > SEARCH_LIMIT) {
+    return null
   }
   return {
     nodes: search.nodes.filter((node) => isPrNode(node)),
@@ -85,17 +134,36 @@ function prPage(query: string, cursor: string | null): { nodes: PrNode[]; after:
   }
 }
 
-/** The user's merged PRs in the window, across all of GitHub. */
-export function mergedPrs(login: string, since: string, until: string): Change[] {
-  const query = `author:${login} is:pr is:merged merged:${since}..${until} sort:created-asc`
+/** Every page of one merged-PR search; null when it holds more than GitHub returns. */
+function prSearch(query: string): PrNode[] | null {
   const nodes: PrNode[] = []
   let after: string | null = null
   do {
     const page = prPage(query, after)
+    if (page === null) {
+      return null
+    }
     nodes.push(...page.nodes)
     ;({ after } = page)
   } while (after !== null)
-  return nodes.map((node) => prToChange(node))
+  return nodes
+}
+
+/**
+ * The user's PRs merged after `since` and up to `until`: across all of GitHub,
+ * or in `repos` only when the run is limited to some. A window with more PRs
+ * than one search returns is read in smaller date ranges.
+ */
+export function mergedPrs(login: string, window: CollectOptions): Change[] {
+  const scopes = window.repos.length > 0 ? window.repos.map((repo) => ` repo:${repo}`) : ['']
+  return scopes
+    .flatMap((scope) =>
+      splitWindow(addDays(window.since, 1), window.until, (from, to) =>
+        prSearch(`author:${login}${scope} is:pr is:merged merged:${from}..${to} sort:created-asc`),
+      ),
+    )
+    .map((node) => prToChange(node))
+    .filter((change) => inWindow(change.date, window.since, window.until))
 }
 
 interface GhCommit {
@@ -143,6 +211,7 @@ export function branchCommits(query: CommitQuery): Change[] {
   const rows = ghLines<GhCommit>(
     `repos/${query.repo}/commits?${params.toString()}`,
     '.[] | {sha, date: .commit.committer.date, message: .commit.message, authorType: .author.type, parents: (.parents | length)}',
+    NO_COMMITS,
   )
   return rows
     .filter((row) => row.parents <= 1 && row.authorType !== 'Bot')
@@ -150,12 +219,20 @@ export function branchCommits(query: CommitQuery): Change[] {
     .filter((change) => inWindow(change.date, query.since, query.until))
 }
 
-/** Repos the user owns, collaborates on, or can reach through an org. */
+/**
+ * Repos the user owns, collaborates on, or can reach through an org. The
+ * listing carries what `repoInfo` needs, so it fills the cache; a fork is left
+ * out because the listing does not name its parent.
+ */
 export function reachableRepos(): string[] {
-  return ghLines<{ full_name: string }>(
+  const rows = ghLines<GhRepoInfo>(
     'user/repos?affiliation=owner,collaborator,organization_member&per_page=100',
-    '.[] | {full_name}',
-  ).map((row) => row.full_name)
+    '.[] | {full_name, description, default_branch, fork}',
+  )
+  for (const row of rows.filter((item) => !item.fork)) {
+    repoInfoCache.set(repoKey(row.full_name), row)
+  }
+  return rows.map((row) => row.full_name)
 }
 
 export interface CommitHit {
@@ -164,15 +241,39 @@ export interface CommitHit {
   msg: string
 }
 
-/** Commit search hits authored by the user after `since`. */
-export function searchCommits(login: string, since: string): CommitHit[] {
-  const search = encodeURIComponent(`author:${login} committer-date:>${since}`)
-  return ghLines<CommitHit>(
-    `search/commits?q=${search}&per_page=100`,
-    String.raw`.items[] | {repo: .repository.full_name, sha, msg: (.commit.message | split("\n")[0])}`,
+interface CommitPage {
+  total: number
+  items: CommitHit[]
+}
+
+const COMMIT_PAGE_JQ = String.raw`{total: .total_count, items: [.items[] | {repo: .repository.full_name, sha, msg: (.commit.message | split("\n")[0])}]}`
+
+/** Every page of one commit search; null when it holds more than GitHub returns. */
+function commitSearch(search: string): CommitHit[] | null {
+  const hits: CommitHit[] = []
+  for (let page = 1; page <= SEARCH_PAGES; page += 1) {
+    const result = ghPick<CommitPage>(
+      `search/commits?q=${encodeURIComponent(search)}&per_page=100&page=${String(page)}`,
+      COMMIT_PAGE_JQ,
+    )
+    if (result === null || result.total > SEARCH_LIMIT) {
+      return null
+    }
+    hits.push(...result.items)
+    if (result.items.length === 0 || hits.length >= result.total) {
+      break
+    }
+  }
+  return hits
+}
+
+/** Commit search hits authored by the user after `since` and up to `until`. */
+export function searchCommits(login: string, since: string, until: string): CommitHit[] {
+  return splitWindow(addDays(since, 1), until, (from, to) =>
+    commitSearch(`author:${login} committer-date:${from}..${to}`),
   )
 }
 
 export function commitExists(repo: string, sha: string): boolean {
-  return ghJson<unknown>(`repos/${repo}/commits/${sha}`) !== null
+  return ghJson<unknown>(`repos/${repo}/commits/${sha}`, NO_SUCH_COMMIT) !== null
 }

@@ -2,6 +2,7 @@ import type { Change, RepoRecord, Role } from './types.ts'
 
 const BODY_LIMIT = 4000
 const DAY_LENGTH = 10
+const DAY_MS = 86_400_000
 
 export function emailRegex(pattern: string): RegExp {
   return new RegExp(`^(?:${pattern})$`, 'iu')
@@ -85,6 +86,46 @@ export function repoFromRemoteUrl(url: string): string | null {
 
 export function today(): string {
   return isoDay(new Date().toISOString())
+}
+
+/** The day `days` after (or, when negative, before) a YYYY-MM-DD day. */
+export function addDays(day: string, days: number): string {
+  return isoDay(new Date(Date.parse(day) + days * DAY_MS).toISOString())
+}
+
+/** The last complete UTC day. */
+export function yesterday(): string {
+  return addDays(today(), -1)
+}
+
+/** Repo names compare without case: GitHub, git remotes and configs spell them differently. */
+export function repoKey(repo: string): string {
+  return repo.toLowerCase()
+}
+
+/**
+ * Reads the days `from..to` (both inclusive) with `fetch`. When `fetch`
+ * returns null, the range holds more than a search can return, so it is
+ * halved and each half is read on its own.
+ */
+export function splitWindow<T>(
+  from: string,
+  to: string,
+  fetch: (from: string, to: string) => T[] | null,
+): T[] {
+  if (from > to) {
+    return []
+  }
+  const found = fetch(from, to)
+  if (found !== null) {
+    return found
+  }
+  if (from === to) {
+    throw new Error(`GitHub could not return the results for ${from} in one search`)
+  }
+  const half = Math.floor((Date.parse(to) - Date.parse(from)) / DAY_MS / 2)
+  const mid = addDays(from, half)
+  return [...splitWindow(from, mid, fetch), ...splitWindow(addDays(mid, 1), to, fetch)]
 }
 
 /** `since < date <= until`, compared on the calendar day. */

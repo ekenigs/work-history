@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 
 import { emailPattern } from './config.ts'
 import {
+  addDays,
   cleanBody,
   extractPrNumber,
   hasCoAuthorTrailer,
@@ -9,7 +10,9 @@ import {
   isOwnEmail,
   parseCursor,
   repoFromRemoteUrl,
+  repoKey,
   resolveAlias,
+  splitWindow,
   stripPrSuffix,
   summarize,
 } from './helpers.ts'
@@ -154,5 +157,65 @@ describe(summarize, () => {
       last: null,
       counts: { author: 0, 'co-author': 0 },
     })
+  })
+})
+
+describe(addDays, () => {
+  it('moves across month and year ends', () => {
+    expect(addDays('2026-10-31', 1)).toBe('2026-11-01')
+    expect(addDays('2026-01-01', -1)).toBe('2025-12-31')
+    expect(addDays('2024-02-28', 2)).toBe('2024-03-01')
+  })
+})
+
+describe(repoKey, () => {
+  it('ignores case', () => {
+    expect(repoKey('Acme/Monorepo')).toBe(repoKey('acme/monorepo'))
+  })
+})
+
+describe(splitWindow, () => {
+  it('reads the range in one call when it fits', () => {
+    const calls: string[] = []
+    const found = splitWindow('2026-01-01', '2026-01-31', (from, to) => {
+      calls.push(`${from}..${to}`)
+      return [from]
+    })
+    expect(found).toStrictEqual(['2026-01-01'])
+    expect(calls).toStrictEqual(['2026-01-01..2026-01-31'])
+  })
+
+  it('reads nothing for an empty range', () => {
+    expect(splitWindow('2026-01-02', '2026-01-01', () => ['never'])).toStrictEqual([])
+  })
+
+  it('halves a range that holds too much, without gaps or overlap', () => {
+    const fetch = vi
+      .fn<(from: string, to: string) => string[] | null>()
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(['2026-01-01'])
+      .mockReturnValueOnce(['2026-01-02'])
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(['2026-01-03'])
+      .mockReturnValueOnce(['2026-01-04'])
+    const found = splitWindow('2026-01-01', '2026-01-04', fetch)
+    const calls = fetch.mock.calls.map(([from, to]) => `${from}..${to}`)
+    expect(found).toStrictEqual(['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04'])
+    expect(calls).toStrictEqual([
+      '2026-01-01..2026-01-04',
+      '2026-01-01..2026-01-02',
+      '2026-01-01..2026-01-01',
+      '2026-01-02..2026-01-02',
+      '2026-01-03..2026-01-04',
+      '2026-01-03..2026-01-03',
+      '2026-01-04..2026-01-04',
+    ])
+  })
+
+  it('fails when a single day holds too much', () => {
+    expect(() => splitWindow('2026-01-01', '2026-01-01', () => null)).toThrow(
+      /2026-01-01 in one search/u,
+    )
   })
 })

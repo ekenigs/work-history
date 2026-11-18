@@ -68,6 +68,14 @@ const BACKFILL_KEYS = new Set([
   'aliases',
 ])
 
+export function isLogin(value: string): boolean {
+  return LOGIN.test(value)
+}
+
+export function isEmail(value: string): boolean {
+  return EMAIL.test(value)
+}
+
 type Obj = Record<string, unknown>
 
 function isObject(value: unknown): value is Obj {

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vite-plus/test'
 
 import type { Config } from './config.ts'
 import { parseConfig, SCHEMA_URL } from './config.ts'
+import { ConfigError } from './errors.ts'
 import {
   buildConfig,
+  checkedConfig,
   formatCanonical,
   parseCanonical,
   serialize,
@@ -81,5 +83,20 @@ describe(buildConfig, () => {
 
   it('falls back to the default output path', () => {
     expect(buildConfig(null, { ...answers, output: '' }).output).toBe('work-history.md')
+  })
+})
+
+describe(checkedConfig, () => {
+  it('returns a config that the loader accepts', () => {
+    expect(checkedConfig('config.json', null, answers)).toStrictEqual(buildConfig(null, answers))
+  })
+
+  it('rejects answers the loader would reject', () => {
+    expect(() => checkedConfig('config.json', null, { ...answers, login: 'ada lovelace' })).toThrow(
+      ConfigError,
+    )
+    expect(() =>
+      checkedConfig('config.json', null, { ...answers, emails: ['ada@@work.example'] }),
+    ).toThrow(/emails/u)
   })
 })

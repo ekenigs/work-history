@@ -96,6 +96,16 @@ export function buildConfig(existing: Config | null, answers: Answers): ConfigFi
   }
 }
 
+/** `buildConfig`, checked the way `collect` checks it, so init never writes a file it rejects. */
+export function checkedConfig(file: string, existing: Config | null, answers: Answers): ConfigFile {
+  const config = buildConfig(existing, answers)
+  const result = parseConfig(config)
+  if ('issues' in result) {
+    throw new ConfigError(file, result.issues)
+  }
+  return config
+}
+
 export function serialize(config: ConfigFile): string {
   return `${JSON.stringify(config, null, 2)}\n`
 }

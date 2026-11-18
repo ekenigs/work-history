@@ -1,7 +1,7 @@
 import type { Config } from './config.ts'
 import { dedupe } from './dedupe.ts'
 import { branchCommits, mergedPrs, reachableRepos, repoInfo } from './github.ts'
-import { byDate, groupByRepo, summarize } from './helpers.ts'
+import { byDate, groupByRepo, repoKey, summarize } from './helpers.ts'
 import { expandHome, localChanges, localRepos, noGitRecord, readmeLine } from './local.ts'
 import type { Change, CollectOptions, CollectRecord, RepoRecord } from './types.ts'
 
@@ -26,6 +26,7 @@ function branchesToRead(meta: RepoMeta, defaultBranch: string): string[] {
 class Backfill {
   public readonly changes: Change[] = []
   public readonly meta = new Map<string, RepoMeta>()
+  private readonly names = new Map<string, string>()
   private readonly cfg: Config
   private readonly opts: CollectOptions
 
@@ -35,16 +36,30 @@ class Backfill {
   }
 
   public wants(repo: string): boolean {
-    return this.opts.repos.length === 0 || this.opts.repos.includes(repo)
+    return (
+      this.opts.repos.length === 0 ||
+      this.opts.repos.some((wanted) => repoKey(wanted) === repoKey(repo))
+    )
+  }
+
+  /** The first spelling seen of a repo: a git remote and GitHub can differ in case. */
+  public nameOf(repo: string): string {
+    const known = this.names.get(repoKey(repo))
+    if (known !== undefined) {
+      return known
+    }
+    this.names.set(repoKey(repo), repo)
+    return repo
   }
 
   public metaFor(repo: string, localPath: string | null = null): RepoMeta {
-    const existing = this.meta.get(repo)
+    const name = this.nameOf(repo)
+    const existing = this.meta.get(name)
     if (existing !== undefined) {
       return existing
     }
     const created = newMeta(localPath)
-    this.meta.set(repo, created)
+    this.meta.set(name, created)
     return created
   }
 
@@ -53,17 +68,18 @@ class Backfill {
     for (const local of localRepos(this.cfg.backfill, root).filter((item) =>
       this.wants(item.repo),
     )) {
-      const meta = this.metaFor(local.repo, local.absPath)
+      const repo = this.nameOf(local.repo)
+      const meta = this.metaFor(repo, local.absPath)
       meta.branches.push(...local.refs.map((ref) => ref.replace('refs/remotes/', '')))
       meta.warnings.push(...local.warnings.filter((warning) => !meta.warnings.includes(warning)))
-      this.changes.push(...localChanges(local, { pattern, ...this.opts }))
+      this.changes.push(...localChanges({ ...local, repo }, { pattern, ...this.opts }))
     }
   }
 
   public readPrs(): void {
-    for (const change of mergedPrs(this.cfg.login, this.opts.since, this.opts.until)) {
+    for (const change of mergedPrs(this.cfg.login, this.opts)) {
       if (this.wants(change.repo)) {
-        this.changes.push(change)
+        this.changes.push({ ...change, repo: this.nameOf(change.repo) })
         this.metaFor(change.repo)
       }
     }

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vite-plus/test'
 import { resolveOptions, toJsonl } from './collect.ts'
 import type { LoadedConfig } from './config.ts'
 import { UsageError } from './errors.ts'
+import { today, yesterday } from './helpers.ts'
 import { change } from './test-fixtures.ts'
 
 function loaded(markdown: string | null): LoadedConfig {
@@ -48,7 +49,7 @@ describe(resolveOptions, () => {
       repos: ['acme/app'],
     })
     expect(options.since).toBe('2026-10-31')
-    expect(options.until).toMatch(/^\d{4}-\d{2}-\d{2}$/u)
+    expect(options.until).toBe(yesterday())
     expect(options.repos).toStrictEqual(['acme/app'])
   })
 
@@ -57,6 +58,12 @@ describe(resolveOptions, () => {
     expect(
       resolveOptions(loaded(null), { mode: 'monthly', since: '2026-01-01', repos: [] }).since,
     ).toBe('2026-01-01')
+  })
+
+  it('rejects a window that ends on a day still in progress', () => {
+    expect(() =>
+      resolveOptions(loaded(null), { mode: 'backfill', until: today(), repos: [] }),
+    ).toThrow(/before today/u)
   })
 
   it('rejects malformed dates', () => {

@@ -20,8 +20,9 @@ Commands:
 Collect options:
   --since YYYY-MM-DD   Start of the window, exclusive. Default: 1970-01-01 for
                        backfill; the cursor in the output file for monthly.
-  --until YYYY-MM-DD   End of the window, inclusive. Default: today.
-  --repo owner/name    Limit to a repo; repeatable.
+  --until YYYY-MM-DD   End of the window, inclusive. Default: yesterday (UTC),
+                       the last complete day.
+  --repo owner/name    Limit to a repo; repeatable. Skips the new-project scan.
   --out <file>         Write JSONL to a file instead of stdout.
 
 Common options:

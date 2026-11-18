@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -34,6 +35,15 @@ export function expandHome(dir: string): string {
   return dir.startsWith('~') ? path.join(homedir(), dir.slice(1)) : dir
 }
 
+/** A folder's entries; none when it cannot be read. */
+function entries(dir: string): Dirent[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+}
+
 function isScannable(name: string): boolean {
   return name !== 'node_modules' && !name.startsWith('.')
 }
@@ -45,7 +55,7 @@ function findGitDirs(dir: string, depth: number): string[] {
   if (existsSync(path.join(dir, '.git'))) {
     return [dir]
   }
-  return readdirSync(dir, { withFileTypes: true })
+  return entries(dir)
     .filter((entry) => entry.isDirectory() && isScannable(entry.name))
     .flatMap((entry) => findGitDirs(path.join(dir, entry.name), depth - 1))
 }
@@ -190,36 +200,60 @@ export function localChanges(repo: LocalRepo, window: LocalWindow): Change[] {
   return out
 }
 
-/** First prose line of a folder's README. */
-export function readmeLine(dir: string): string | null {
-  const readme = readdirSync(dir).find((file) => /^readme(?:\.md)?$/iu.test(file))
-  if (readme === undefined) {
+/** A file's text; null when it is missing, a folder, or unreadable. */
+function readText(file: string): string | null {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch {
     return null
   }
-  const line = readFileSync(path.join(dir, readme), 'utf8')
+}
+
+/** First prose line of a folder's README. */
+export function readmeLine(dir: string): string | null {
+  const readme = entries(dir).find(
+    (entry) => !entry.isDirectory() && /^readme(?:\.md)?$/iu.test(entry.name),
+  )
+  const text = readme === undefined ? null : readText(path.join(dir, readme.name))
+  if (text === null) {
+    return null
+  }
+  const line = text
     .split('\n')
-    .map((text) => text.replace(/^#+\s*/u, '').trim())
-    .find((text) => text !== '' && !text.startsWith('<') && !text.startsWith('!['))
+    .map((row) => row.replace(/^#+\s*/u, '').trim())
+    .find((row) => row !== '' && !row.startsWith('<') && !row.startsWith('!['))
   return line ?? null
 }
 
+/** The day a file last changed; none for a dangling link or a file that cannot be read. */
+function modifiedDay(file: string): string[] {
+  try {
+    return [isoDay(new Date(statSync(file).mtimeMs).toISOString())]
+  } catch {
+    return []
+  }
+}
+
 function fileDays(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true })
+  return entries(dir)
     .filter((entry) => isScannable(entry.name))
     .flatMap((entry) => {
       const file = path.join(dir, entry.name)
-      return entry.isDirectory()
-        ? fileDays(file)
-        : [isoDay(new Date(statSync(file).mtimeMs).toISOString())]
+      return entry.isDirectory() ? fileDays(file) : modifiedDay(file)
     })
 }
 
-function packageDescription(dir: string): string | null {
-  const pkg = path.join(dir, 'package.json')
-  if (!existsSync(pkg)) {
+/** A package.json's content; null when it is missing or not JSON. */
+function parsePackage(text: string | null): unknown {
+  try {
+    return text === null ? null : JSON.parse(text)
+  } catch {
     return null
   }
-  const parsed: unknown = JSON.parse(readFileSync(pkg, 'utf8'))
+}
+
+function packageDescription(dir: string): string | null {
+  const parsed = parsePackage(readText(path.join(dir, 'package.json')))
   const description =
     typeof parsed === 'object' && parsed !== null && 'description' in parsed
       ? parsed.description

@@ -1,7 +1,15 @@
 import type { Config } from './config.ts'
 import { dedupe } from './dedupe.ts'
-import { branchCommits, commitExists, mergedPrs, repoInfo, searchCommits } from './github.ts'
-import { byDate, summarize } from './helpers.ts'
+import type { CommitHit } from './github.ts'
+import {
+  branchCommits,
+  commitExists,
+  mergedPrs,
+  repoInfo,
+  repoKeys,
+  searchCommits,
+} from './github.ts'
+import { byDate, repoKey, summarize } from './helpers.ts'
 import type { Change, CollectOptions, CollectRecord, NewProjectRecord } from './types.ts'
 
 const SHORT_SHA = 9
@@ -12,22 +20,41 @@ interface RunContext {
   prs: readonly Change[]
 }
 
+/**
+ * Keys of the repos on either list. Approved repos also count under GitHub's
+ * current name, so a renamed repo is not a new project.
+ */
+function knownRepos(cfg: Config): Set<string> {
+  return new Set([
+    ...cfg.ignored.map((repo) => repoKey(repo)),
+    ...cfg.approved.flatMap((repo) => repoKeys(repo)),
+  ])
+}
+
+function inRepo(change: Change, repo: string): Change {
+  return { ...change, repo }
+}
+
+/** A fork's commit counts only if it is not already in its parent. */
+function isOwnWork(hit: CommitHit): boolean {
+  const parent = repoInfo(hit.repo)?.parent?.full_name
+  return parent === undefined || !commitExists(parent, hit.sha)
+}
+
 /** Merged PRs or own commits in repos on neither list. */
 function newProjects({ cfg, opts, prs }: RunContext): NewProjectRecord[] {
-  const known = new Set([...cfg.approved, ...cfg.ignored, ...opts.repos])
+  const known = knownRepos(cfg)
+  const isNew = (item: { repo: string }): boolean => !known.has(repoKey(item.repo))
   const evidence = new Map<string, string[]>()
   const add = (repo: string, line: string): void => {
     evidence.set(repo, [...(evidence.get(repo) ?? []), line])
   }
-  for (const change of prs.filter((pr) => !known.has(pr.repo))) {
+  for (const change of prs.filter((pr) => isNew(pr))) {
     add(change.repo, `PR #${String(change.pr)}: ${change.title}`)
   }
-  for (const hit of searchCommits(cfg.login, opts.since).filter((item) => !known.has(item.repo))) {
-    const parent = repoInfo(hit.repo)?.parent?.full_name
-    // A fork counts only if the commit is not already in its parent.
-    if (parent === undefined || !commitExists(parent, hit.sha)) {
-      add(hit.repo, `commit ${hit.sha.slice(0, SHORT_SHA)}: ${hit.msg}`)
-    }
+  const hits = searchCommits(cfg.login, opts.since, opts.until)
+  for (const hit of hits.filter((item) => isNew(item) && isOwnWork(item))) {
+    add(hit.repo, `commit ${hit.sha.slice(0, SHORT_SHA)}: ${hit.msg}`)
   }
   return [...evidence]
     .toSorted(([a], [b]) => a.localeCompare(b))
@@ -36,7 +63,11 @@ function newProjects({ cfg, opts, prs }: RunContext): NewProjectRecord[] {
 
 function repoChanges({ cfg, opts, prs }: RunContext, repo: string): CollectRecord[] {
   const info = repoInfo(repo)
-  const list = prs.filter((change) => change.repo === repo)
+  const keys = new Set(repoKeys(repo))
+  // PRs carry GitHub's spelling of the repo; the records use the config's.
+  const list = prs
+    .filter((change) => keys.has(repoKey(change.repo)))
+    .map((change) => inRepo(change, repo))
   if (info !== null) {
     list.push(...branchCommits({ repo, login: cfg.login, branch: info.default_branch, ...opts }))
   }
@@ -59,12 +90,16 @@ function repoChanges({ cfg, opts, prs }: RunContext, repo: string): CollectRecor
   ]
 }
 
-/** GitHub-only run over the `approved` repos (or `opts.repos`), plus new-project candidates. */
+/**
+ * GitHub-only run over the `approved` repos plus new-project candidates, or
+ * over `opts.repos` alone: a run limited to some repos reads nothing else.
+ */
 export function monthly(cfg: Config, opts: CollectOptions): CollectRecord[] {
-  const targets = opts.repos.length > 0 ? opts.repos : cfg.approved
-  const prs = mergedPrs(cfg.login, opts.since, opts.until)
+  const limited = opts.repos.length > 0
+  const targets = limited ? opts.repos : cfg.approved
+  const prs = mergedPrs(cfg.login, opts)
   return [
-    ...newProjects({ cfg, opts, prs }),
+    ...(limited ? [] : newProjects({ cfg, opts, prs })),
     ...targets.toSorted().flatMap((repo) => repoChanges({ cfg, opts, prs }, repo)),
     { type: 'run', mode: 'monthly', since: opts.since, until: opts.until, warnings: [] },
   ]

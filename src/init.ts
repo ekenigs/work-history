@@ -16,18 +16,18 @@ import {
 } from '@clack/prompts'
 
 import type { Config } from './config.ts'
-import { DEFAULT_OUTPUT } from './config.ts'
+import { DEFAULT_OUTPUT, isEmail, isLogin } from './config.ts'
 import { CancelledError, UsageError } from './errors.ts'
 import { ghAuthenticated } from './exec.ts'
 import type { Answers, Detected } from './init-config.ts'
 import {
-  buildConfig,
   detect,
   formatCanonical,
   parseCanonical,
   readExisting,
   serialize,
   splitList,
+  checkedConfig,
 } from './init-config.ts'
 
 export interface InitOptions {
@@ -71,7 +71,7 @@ function defaults(existing: Config | null, detected: Detected): Answers {
 }
 
 function validEmails(value: string | undefined): string | undefined {
-  return splitList(value ?? '').every((email) => email.includes('@'))
+  return splitList(value ?? '').every((email) => isEmail(email))
     ? undefined
     : 'Each entry must be an email'
 }
@@ -123,13 +123,13 @@ async function askCanonical(
   return typeof parsed === 'string' ? {} : parsed
 }
 
-function required(value: string | undefined): string | undefined {
-  return value === undefined || value.trim() === '' ? 'Required' : undefined
+function validLogin(value: string | undefined): string | undefined {
+  return isLogin((value ?? '').trim()) ? undefined : 'Enter a GitHub login, such as octocat'
 }
 
 async function ask(start: Answers, detected: Detected): Promise<Answers> {
   const login = answered(
-    await text({ message: 'GitHub login', initialValue: start.login, validate: required }),
+    await text({ message: 'GitHub login', initialValue: start.login, validate: validLogin }),
   )
   const emails = await askEmails(start.emails, detected.emails)
   const output = answered(
@@ -193,8 +193,9 @@ async function gather(
 async function setup(options: InitOptions): Promise<void> {
   const file = path.resolve(options.configPath)
   const { existing, answers } = await gather(file, options.yes)
+  const config = checkedConfig(file, existing, answers)
   const withSkill = await wantSkill(options.yes)
-  writeFileSync(file, serialize(buildConfig(existing, answers)))
+  writeFileSync(file, serialize(config))
   log.success(`Wrote ${shown(file)}`)
   const skillFiles = withSkill ? installSkill(path.dirname(file)) : []
   for (const written of skillFiles) {

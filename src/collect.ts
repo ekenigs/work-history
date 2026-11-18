@@ -4,7 +4,7 @@ import { backfill } from './backfill.ts'
 import type { LoadedConfig } from './config.ts'
 import { emailPattern, outputPath } from './config.ts'
 import { UsageError } from './errors.ts'
-import { parseCursor, today } from './helpers.ts'
+import { parseCursor, today, yesterday } from './helpers.ts'
 import { monthly } from './monthly.ts'
 import type { CollectOptions, CollectRecord, Mode } from './types.ts'
 
@@ -28,12 +28,20 @@ function cursorSince(loaded: LoadedConfig): string {
   return cursor
 }
 
-/** Fills in the window: backfill starts at 1970-01-01, monthly at the output file's cursor. */
+/**
+ * Fills in the window: backfill starts at 1970-01-01, monthly at the output
+ * file's cursor. It ends at yesterday (UTC) at the latest: the cursor moves to
+ * `until` and the next run starts after it, so a day still in progress would
+ * lose whatever lands later that day.
+ */
 export function resolveOptions(loaded: LoadedConfig, args: CollectArgs): CollectOptions {
-  const until = args.until ?? today()
+  const until = args.until ?? yesterday()
   const since = args.since ?? (args.mode === 'backfill' ? '1970-01-01' : cursorSince(loaded))
   if (!DAY.test(since) || !DAY.test(until)) {
     throw new UsageError('--since and --until must be YYYY-MM-DD')
+  }
+  if (until >= today()) {
+    throw new UsageError(`--until must be before today (${today()} UTC); that day is not over yet`)
   }
   return { since, until, repos: args.repos }
 }
