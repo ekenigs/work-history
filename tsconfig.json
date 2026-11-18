@@ -1,5 +1,5 @@
 {
-  // Based on SudoryHQ/sudory config/tsconfig.base.json, with extra strictness.
+  // The strictest settings for a Node ESM package.
   "compilerOptions": {
     // Language & environment
     "target": "ES2024",
