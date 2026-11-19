@@ -1,6 +1,6 @@
 {
   "name": "work-history",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Keep a dated log of everything you shipped, collected from your GitHub PRs and commits and written up by your coding agent.",
   "keywords": [
     "agent-skill",
