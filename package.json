@@ -22,7 +22,7 @@
     "url": "git+https://github.com/ekenigs/work-history.git"
   },
   "bin": {
-    "work-history": "./dist/cli.mjs"
+    "work-history": "dist/cli.mjs"
   },
   "files": [
     "dist",
