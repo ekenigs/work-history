@@ -53,20 +53,6 @@ It skips obvious noise (dependency bumps, merge, WIP and lint commits), writes o
 
 ## Quick start
 
-> [!NOTE]
-> `work-history` is not on npm yet. Until it is, install it from source:
->
-> ```bash
-> git clone https://github.com/ekenigs/work-history.git
-> cd work-history && pnpm install && pnpm build && pnpm add -g "link:$PWD"
-> ```
->
-> If pnpm says the global bin directory is not in `PATH`, run `pnpm setup`, open a new shell and try again. If `pnpm setup` says your shell config already has a pnpm section, it was written by an older pnpm that put a different directory on `PATH`. Run `pnpm setup --force` to replace it.
->
-> The global install links to your clone, so `pnpm build` picks up changes without reinstalling. Remove it with `pnpm remove -g work-history`.
->
-> Then use `work-history` wherever this README says `npx work-history`.
-
 In the repo (or folder) where you want to keep your log:
 
 ```bash

@@ -47,7 +47,7 @@
     "build": "vp pack",
     "check": "vp check",
     "fix": "vp check --fix",
-    "prepublishOnly": "pnpm run check && pnpm run test && pnpm run build",
+    "prepublishOnly": "vp check && vp test run && vp pack",
     "test": "vp test run"
   },
   "dependencies": {
